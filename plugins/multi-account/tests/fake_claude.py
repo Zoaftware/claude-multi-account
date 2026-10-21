@@ -8,7 +8,7 @@ then "commit":
   outside    also write shared.txt (outside its files): two of these make a merge conflict
   sleep      sleep 60 s (to test stopping a run)
   no-report  commit, but no report file: only the final answer says RESULT: DONE
-Every call appends one JSON line to FAKE_LEDGER: account, piece, mode, argv, whether a parent session variable
+Every call appends one JSON line to FAKE_LEDGER: account, piece, mode, argv, which planted parent variables
 leaked. `claude auth status --json` answers from the folder's test file .fake-auth.json ({"email": ...}) and is not
 written to the ledger."""
 import json
@@ -18,12 +18,14 @@ import subprocess
 import sys
 import time
 
+# variables the tests plant in the parent; none of them may reach a `claude` run
+PROBES = ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ANTHROPIC_MODEL", "MA_UNLISTED")
 cfg = os.environ.get("CLAUDE_CONFIG_DIR", "")
 if sys.argv[1:3] == ["auth", "status"]:
     folder = cfg or os.path.join(os.environ.get("MA_HOME") or os.path.expanduser("~"), ".claude")
     try:
         email = json.load(open(os.path.join(folder, ".fake-auth.json")))["email"]
-        print(json.dumps({"loggedIn": True, "authMethod": "claude.ai", "email": email}))
+        print(json.dumps({"loggedIn": True, "email": email}))
     except (OSError, ValueError, KeyError):
         print(json.dumps({"loggedIn": False}))
     sys.exit(0)
@@ -37,7 +39,7 @@ mode = script.get("piece:" + piece) or script.get(account) or "commit"
 join = "You join one piece" in prompt
 with open(os.environ["FAKE_LEDGER"], "a") as f:
     f.write(json.dumps({"account": account, "piece": piece, "mode": "join" if join else mode, "argv": sys.argv[1:-1],
-                        "leak": any(k.startswith(("CLAUDE_CODE_", "ANTHROPIC_")) for k in os.environ),
+                        "leak": [k for k in PROBES if k in os.environ],
                         "cwd": os.getcwd()}) + "\n")
 git = lambda *a: subprocess.run(["git"] + list(a), capture_output=True, text=True)
 

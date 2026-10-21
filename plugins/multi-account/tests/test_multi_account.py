@@ -18,6 +18,8 @@ LIB = os.path.join(os.path.dirname(HERE), "lib")
 MA = os.path.join(LIB, "ma.py")
 FAKE = os.path.join(HERE, "fake_claude.py")
 NEVER_MODE = "bypass" + "Permissions"  # the permission mode a worker must never get
+PASS = "MA_HOME,FAKE_SCRIPT,FAKE_LEDGER"  # what the fake `claude` needs to see
+ARTIFACT_URL = "https://example.com/artifact/"
 
 
 class World:
@@ -53,11 +55,10 @@ class World:
 
     def env(self, **extra):
         json.dump(self.script, open(os.path.join(self.home, "script.json"), "w"))
-        e = dict(os.environ, MA_HOME=self.home, MULTI_ACCOUNT_HOME=self.data,
-                 FAKE_SCRIPT=os.path.join(self.home, "script.json"), FAKE_LEDGER=self.ledger, MA_CLAUDE=FAKE,
-                 MA_PAUSE="0.2", MA_NO_OPEN="1")
-        for k in ("CLAUDE_CONFIG_DIR", "MULTI_ACCOUNT_WORKTREES", "MULTI_ACCOUNT_ARTIFACTS"):
-            e.pop(k, None)
+        e = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG") if k in os.environ}
+        e.update(MA_HOME=self.home, MULTI_ACCOUNT_HOME=self.data, FAKE_SCRIPT=os.path.join(self.home, "script.json"),
+                 FAKE_LEDGER=self.ledger, MA_CLAUDE=FAKE, MA_PAUSE="0.2", MA_NO_OPEN="1",
+                 MULTI_ACCOUNT_PASS_ENV=PASS)
         e.update(extra)
         return e
 
@@ -123,6 +124,7 @@ class Lib(unittest.TestCase):
         os.environ["MULTI_ACCOUNT_HOME"] = cls.tmp
         os.environ["MA_HOME"] = cls.tmp
         os.environ["MA_CLAUDE"] = FAKE  # never the real `claude`
+        os.environ["MULTI_ACCOUNT_PASS_ENV"] = PASS
         sys.path.insert(0, LIB)
         import accounts
         import split
@@ -134,6 +136,7 @@ class Lib(unittest.TestCase):
         os.environ.pop("MULTI_ACCOUNT_HOME", None)
         os.environ.pop("MA_HOME", None)
         os.environ.pop("MA_CLAUDE", None)
+        os.environ.pop("MULTI_ACCOUNT_PASS_ENV", None)
 
     def setUp(self):
         try:
@@ -251,7 +254,7 @@ class Runs(unittest.TestCase):
         self.assertEqual(run["state"], "ready", self.m.file(rid, "watcher.log"))
         calls = self.m.calls()
         self.assertEqual(sorted(l["account"] for l in calls), ["main", "team", "work"])
-        self.assertFalse(any(l["leak"] for l in calls))
+        self.assertEqual([l["leak"] for l in calls], [[]] * 3)
         for l in calls:  # the fence: never skip permissions, git only in its own worktree
             self.assertNotIn(NEVER_MODE, l["argv"])
             self.assertIn("acceptEdits", l["argv"])
@@ -399,10 +402,13 @@ class Runs(unittest.TestCase):
         self.assertTrue(run["wip"])
         self.assertIn("half_done.txt", self.m.git("show", "--name-only", run["wip"]))
 
-    def test_the_parent_session_never_leaks(self):
-        rid, run = self.m.run([piece("a", ["a.txt"])], CLAUDE_CODE_SESSION_ID="parent-session",
-                              ANTHROPIC_MODEL="parent-model")
-        self.assertFalse(any(l["leak"] for l in self.m.calls()))
+    def test_a_worker_gets_only_the_listed_variables(self):
+        # the parent session's variables never pass, not even when listed; a variable off the list never passes
+        rid, run = self.m.run([piece("a", ["a.txt"])], CLAUDECODE="1", CLAUDE_CODE_SESSION_ID="parent-session",
+                              CLAUDE_CODE_ENTRYPOINT="cli", ANTHROPIC_MODEL="parent-model", MA_UNLISTED="x",
+                              MULTI_ACCOUNT_PASS_ENV=PASS + ",CLAUDE_CODE_SESSION_ID,ANTHROPIC_MODEL")
+        self.assertEqual(run["state"], "ready-untested", self.m.file(rid, "watcher.log"))
+        self.assertEqual([l["leak"] for l in self.m.calls()], [[]])
 
     def test_at_most_six_workers_at_once_and_stop(self):
         rid = self.m.start([piece(c, [c + ".txt"]) for c in "abcdefgh"])
@@ -450,7 +456,7 @@ class Artifacts(unittest.TestCase):
         pubs += [{"when": w, "files": f, "description": None, "capabilities": None, "account": c} for c, w, f in more]
         if title:
             open(os.path.join(d, "index.html"), "w").write("<html><head>%s</head></html>" % title)
-        json.dump({"url": "https://claude.ai/artifact/" + aid, "publishes": pubs}, open(os.path.join(d, "_meta.json"), "w"))
+        json.dump({"url": ARTIFACT_URL + aid, "publishes": pubs}, open(os.path.join(d, "_meta.json"), "w"))
 
     def ma(self, *a):
         return self.m.ma(*a, MULTI_ACCOUNT_ARTIFACTS=self.folder)
@@ -479,7 +485,7 @@ class Artifacts(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn(os.path.join(self.folder, "AAA", "index.html"), r.stdout)
         r = self.ma("view", "CCC")
-        self.assertIn("https://claude.ai/artifact/CCC", r.stdout)
+        self.assertIn(ARTIFACT_URL + "CCC", r.stdout)
         self.assertNotEqual(self.ma("view", "ZZZ").returncode, 0)
 
     def test_gallery_has_every_artifact_and_the_pane_the_summary(self):

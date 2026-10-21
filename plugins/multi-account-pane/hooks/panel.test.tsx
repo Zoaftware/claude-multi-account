@@ -56,7 +56,7 @@ const DATA = {
     total: 2,
     per_account: { main: 1, work: 1 },
     newest: [
-      { id: 'A1', url: 'https://claude.ai/artifact/A1', title: 'Store plan', account: 'main', when_text: 'today 15:12', copy: '/x/index.html', live: false },
+      { id: 'A1', url: 'https://example.com/artifact/A1', title: 'Store plan', account: 'main', when_text: 'today 15:12', copy: '/x/index.html', live: false },
       { id: 'A2', url: null, title: 'Sales board', account: 'work', when_text: 'Tue 20 10:00', copy: null, live: true },
     ],
   },
