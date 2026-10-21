@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zoaftware",
+  "description": "Zoaftware plugins for Claude Code",
+  "owner": {
+    "name": "Zoaftware",
+    "url": "https://zoaftware.com"
+  },
+  "plugins": [
+    {
+      "name": "multi-account",
+      "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: one git worktree per piece, handed to another account when one hits its limit, joined at the end",
+      "source": "./plugins/multi-account",
+      "category": "productivity",
+      "author": {
+        "name": "Zoaftware",
+        "url": "https://zoaftware.com"
+      },
+      "homepage": "https://zoaftware.com"
+    },
+    {
+      "name": "multi-account-pane",
+      "description": "A pane beside the chat for the multi-account plugin; start a message with all: to split it across your accounts, or with an account name to send it to that one",
+      "source": "./plugins/multi-account-pane",
+      "category": "productivity",
+      "author": {
+        "name": "Zoaftware",
+        "url": "https://zoaftware.com"
+      },
+      "homepage": "https://zoaftware.com"
+    }
+  ]
+}
