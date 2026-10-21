@@ -26,6 +26,14 @@ Or in one step each:
     /plugin install multi-account --marketplace Zoaftware/claude-multi-account
     /plugin install multi-account-pane --marketplace Zoaftware/claude-multi-account
 
+From a shell:
+
+    claude plugin install multi-account --marketplace Zoaftware/claude-multi-account
+    claude plugin install multi-account-pane --marketplace Zoaftware/claude-multi-account
+
+In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add
+marketplace** with `Zoaftware/claude-multi-account`, then **Add plugin**.
+
 It needs `git` and `python3` (3.8 or newer, standard library only). Opening a sign-in window by itself works on
 macOS; elsewhere the plugin prints the command to run.
 
