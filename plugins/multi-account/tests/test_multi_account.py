@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""multi-account tests: no AI, no login secrets, no network. Each test builds a fake home (config folders with only
-a .claude.json, a git project) and runs ma.py as the user would; workers are tests/fake_claude.py.
+"""multi-account tests: no AI, no login secrets, no network. Each test builds a fake home (config folders, a git
+project) and runs ma.py as the user would; `claude` (sign-in checks and workers) is tests/fake_claude.py.
 
     python3 -m unittest discover -s plugins/multi-account/tests -v
 """
@@ -28,9 +28,9 @@ class World:
         self.data = os.path.join(self.home, "data")
         os.makedirs(os.path.join(self.home, ".claude"))
         self.script = {}
-        self.sign_in("~/.claude", "me@example.com", "U1")
-        self.sign_in("~/.claude-work", "work@example.com", "U2")
-        self.sign_in("~/.claude-spare", "me@example.com", "U1")  # the same login as the main one
+        self.sign_in("~/.claude", "me@example.com")
+        self.sign_in("~/.claude-work", "work@example.com")
+        self.sign_in("~/.claude-spare", "Me@Example.com")  # the same login as the main one
         self.repo = os.path.join(self.home, "project")
         os.makedirs(self.repo)
         self.git("init", "-q", "-b", "main")
@@ -45,12 +45,11 @@ class World:
     def git(self, *a):
         return subprocess.run(["git", "-C", self.repo] + list(a), capture_output=True, text=True, check=True).stdout
 
-    def sign_in(self, d, email, uuid):
-        """What Claude Code writes at sign-in that this plugin reads: the oauthAccount block of .claude.json."""
+    def sign_in(self, d, email):
+        """A sign-in in that folder: the fake `claude auth status` then answers with this email."""
         folder = os.path.join(self.home, d[2:])
         os.makedirs(folder, exist_ok=True)
-        cj = os.path.join(self.home, ".claude.json") if d == "~/.claude" else os.path.join(folder, ".claude.json")
-        json.dump({"oauthAccount": {"emailAddress": email, "accountUuid": uuid}, "theme": "dark"}, open(cj, "w"))
+        json.dump({"email": email}, open(os.path.join(folder, ".fake-auth.json"), "w"))
 
     def env(self, **extra):
         json.dump(self.script, open(os.path.join(self.home, "script.json"), "w"))
@@ -123,6 +122,7 @@ class Lib(unittest.TestCase):
         cls.tmp = tempfile.mkdtemp(prefix="ma-lib-")
         os.environ["MULTI_ACCOUNT_HOME"] = cls.tmp
         os.environ["MA_HOME"] = cls.tmp
+        os.environ["MA_CLAUDE"] = FAKE  # never the real `claude`
         sys.path.insert(0, LIB)
         import accounts
         import split
@@ -133,6 +133,7 @@ class Lib(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
         os.environ.pop("MULTI_ACCOUNT_HOME", None)
         os.environ.pop("MA_HOME", None)
+        os.environ.pop("MA_CLAUDE", None)
 
     def setUp(self):
         try:
@@ -206,17 +207,17 @@ class Accounts(unittest.TestCase):
         self.assertEqual(os.stat(folder).st_mode & 0o777, 0o700)
         self.assertIn('CLAUDE_CONFIG_DIR="$HOME/.claude-account2" claude', r.stdout)
         row = [c for c in self.m.accounts()["accounts"] if c["name"] == "account2"][0]
-        self.assertIsNone(row["uuid"])
+        self.assertIsNone(row["login"])
         self.assertIn("not signed in", self.m.ma("accounts").stdout)
         self.assertFalse(os.path.exists(os.path.join(self.m.home, ".zshrc")))  # no shell file is edited
-        # the user signs in: Claude Code writes its oauthAccount block
-        self.m.sign_in("~/.claude-account2", "new@example.com", "U3")
+        # the user signs in there
+        self.m.sign_in("~/.claude-account2", "new@example.com")
         r = self.m.ma("connect", "account2")
         self.assertIn("connected", r.stdout)
         self.assertIn("3 accounts ready", self.m.ma("accounts").stdout)
         # one more, with a login that is already connected
         self.m.ma("connect", "other")
-        self.m.sign_in("~/.claude-other", "work@example.com", "U2")
+        self.m.sign_in("~/.claude-other", "work@example.com")
         r = self.m.ma("connect", "other")
         self.assertIn("same login as 'work'", r.stdout)
         self.assertIn("3 accounts ready", self.m.ma("accounts").stdout)
@@ -238,7 +239,7 @@ class Runs(unittest.TestCase):
     def setUp(self):
         self.m = World()
         self.m.ma("connect", "team")
-        self.m.sign_in("~/.claude-team", "team@example.com", "U4")
+        self.m.sign_in("~/.claude-team", "team@example.com")
 
     def tearDown(self):
         self.m.remove()
@@ -398,9 +399,9 @@ class Runs(unittest.TestCase):
         self.assertTrue(run["wip"])
         self.assertIn("half_done.txt", self.m.git("show", "--name-only", run["wip"]))
 
-    def test_the_session_token_never_leaks(self):
-        rid, run = self.m.run([piece("a", ["a.txt"])], CLAUDE_CODE_OAUTH_TOKEN="secret",
-                              CLAUDE_CODE_SESSION_ID="parent-session")
+    def test_the_parent_session_never_leaks(self):
+        rid, run = self.m.run([piece("a", ["a.txt"])], CLAUDE_CODE_SESSION_ID="parent-session",
+                              ANTHROPIC_MODEL="parent-model")
         self.assertFalse(any(l["leak"] for l in self.m.calls()))
 
     def test_at_most_six_workers_at_once_and_stop(self):

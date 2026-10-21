@@ -32,14 +32,11 @@ import split as S
 
 RUNS = os.path.join(A.DATA, "runs")
 WORKTREES = os.environ.get("MULTI_ACCOUNT_WORKTREES") or os.path.join(A.DATA, "worktrees")
-CLAUDE = os.environ.get("MA_CLAUDE") or "claude"
+CLAUDE = A.CLAUDE
 MAX_LOCAL = int(os.environ.get("MA_MAX_LOCAL") or 6)  # never more workers at once on this machine
 PAUSE_S = float(os.environ.get("MA_PAUSE") or 30)
 LIMIT_RE = re.compile(r"hit your (weekly|session|usage|opus|sonnet)? ?limit|usage limit reached|limit reached", re.I)
 ID_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}$")
-# the parent session's variables never reach a worker: a token or a session id in them would make every worker run
-# as the parent's account, whatever CLAUDE_CONFIG_DIR says
-ENV_OUT = re.compile(r"^(CLAUDE_CODE_|CLAUDECODE$|CLAUDE_PID$|CLAUDE_EFFORT$|ANTHROPIC_API_KEY$|ANTHROPIC_AUTH_TOKEN$)")
 TOOLS = ["Read", "Edit", "Write", "Glob", "Grep"]  # plus git in its own worktree and its piece's check
 
 
@@ -233,11 +230,7 @@ def permissions(run, p):
 
 
 def environment(account_dir):
-    env = {k: v for k, v in os.environ.items() if not ENV_OUT.match(k)}
-    env.pop("CLAUDE_CONFIG_DIR", None)
-    cfg = A.config_env(account_dir)
-    if cfg:
-        env["CLAUDE_CONFIG_DIR"] = cfg
+    env = A.clean_env(account_dir)
     env["MULTI_ACCOUNT_WORKER"] = "1"  # lets the user's own hooks tell a worker from an interactive session
     return env
 

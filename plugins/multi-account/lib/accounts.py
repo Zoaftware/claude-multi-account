@@ -3,20 +3,20 @@
 One list, kept in the plugin's data folder (<data>/accounts.json). Each row is one Claude Code config folder with
 its own login, connected one at a time:
 
-    {"name": "work2", "dir": "~/.claude-work2", "email": "...", "uuid": "...", "active": true,
+    {"name": "work2", "dir": "~/.claude-work2", "email": "...", "login": "...", "active": true,
      "duplicate_of": null, "since": "2026-10-21 15:02"}
 
-An account is known by its accountUuid, never by its folder: two folders can hold the same login, so a login is only
-counted once ("duplicate of main").
+An account is known by its login (the email it signed in with), never by its folder: two folders can hold the same
+login, so a login is only counted once ("duplicate of main").
 
-This plugin never reads, stores or sends a login secret. It identifies an account only from the non-secret
-`oauthAccount` block (email and accountUuid) that Claude Code writes in the folder's `.claude.json` at sign-in:
-signed in = that block has an accountUuid. Usage is never measured: an account is "full" only after one of its
-workers printed Claude Code's usage-limit message, until the reset time that message names (or one hour).
+This plugin never reads, stores or sends a login secret, and it never opens Claude Code's own files. It asks Claude
+Code itself who is signed in, with `claude auth status --json` run for that folder, and keeps only the email from
+the answer. Usage is never measured: an account is "full" only after one of its workers printed Claude Code's
+usage-limit message, until the reset time that message names (or one hour).
 
 Data folder: $MULTI_ACCOUNT_HOME, else ~/.multi-account (outside every .claude folder, so workers may write
 reports there). Tests replace the machine with MA_HOME (the home
-folder) and MA_NO_OPEN (never open a window).
+folder), MA_CLAUDE (the `claude` command) and MA_NO_OPEN (never open a window).
 """
 import fcntl
 import json
@@ -36,6 +36,12 @@ MAIN = "~/.claude"
 NAME_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
 RESERVED = {"main", "multi-account", "all"}
 FULL_DEFAULT_S = 3600  # a limit message with no readable reset time keeps the account out for one hour
+CLAUDE = os.environ.get("MA_CLAUDE") or "claude"
+# a `claude` run for an account sees only that folder's own sign-in and settings: the parent session's variables
+# (its session id, any Anthropic setting) never reach it, or it would run as the parent's account whatever
+# CLAUDE_CONFIG_DIR says
+ENV_OUT = re.compile(r"^(CLAUDE_CODE_|CLAUDECODE$|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_CONFIG_DIR$|ANTHROPIC_)")
+WHO_TTL_S = 30  # a long-lived watcher asks again after this, so a sign-in or sign-out is seen
 
 
 # ---------- folders ----------
@@ -63,15 +69,39 @@ def config_env(d):
     return "" if is_main(d) else path(d)
 
 
+def clean_env(d):
+    """The environment of a `claude` run for account d: this one minus the parent session's variables, with
+    CLAUDE_CONFIG_DIR set to that folder (left unset for the main account)."""
+    env = {k: v for k, v in os.environ.items() if not ENV_OUT.match(k)}
+    cfg = config_env(d)
+    if cfg:
+        env["CLAUDE_CONFIG_DIR"] = cfg
+    return env
+
+
+_WHO = {}  # folder -> (when asked, (email, login))
+
+
 def identity(d):
-    """(email, accountUuid) from that folder's .claude.json, written by Claude Code at sign-in; (None, None) if none.
-    Only the non-secret oauthAccount block is read."""
-    f = os.path.join(HOME, ".claude.json") if is_main(d) else os.path.join(path(d), ".claude.json")
-    try:
-        a = json.load(open(f)).get("oauthAccount") or {}
-        return a.get("emailAddress"), a.get("accountUuid")
-    except Exception:
-        return None, None
+    """(email, login) of the account signed in in that folder, from `claude auth status --json`; (None, None) when
+    nobody is signed in there with a Claude account. The login is the email in lower case."""
+    d = short(d)
+    hit = _WHO.get(d)
+    if hit and time.time() - hit[0] < WHO_TTL_S:
+        return hit[1]
+    who = (None, None)
+    if os.path.isdir(path(d)):
+        try:
+            r = subprocess.run([CLAUDE, "auth", "status", "--json"], capture_output=True, text=True, timeout=30,
+                               env=clean_env(d), stdin=subprocess.DEVNULL)
+            a = json.loads(r.stdout or "{}")
+            email = a.get("email") if a.get("loggedIn") else None
+            if isinstance(email, str) and "@" in email:
+                who = (email, email.strip().lower())
+        except Exception:
+            pass
+    _WHO[d] = (time.time(), who)
+    return who
 
 
 def signed_in(d):
@@ -199,11 +229,11 @@ def name_of(d):
 
 
 def _duplicates(lst):
-    """The first row with a uuid owns it; a later row with the same uuid is a duplicate of the first."""
+    """The first row with a login owns it; a later row with the same login is a duplicate of the first."""
     owners, changed = {}, False
     for c in lst["accounts"]:
         before = c.get("duplicate_of")
-        u = c.get("uuid")
+        u = c.get("login")
         c["duplicate_of"] = owners[u] if u and u in owners else None
         if u and u not in owners:
             owners[u] = c["name"]
@@ -212,12 +242,12 @@ def _duplicates(lst):
 
 
 def _refresh(lst):
-    """Fill in email and uuid for rows that signed in (or out) since; True if anything changed."""
+    """Fill in email and login for rows that signed in (or out) since; True if anything changed."""
     changed = False
     for c in lst["accounts"]:
-        email, uuid = identity(c["dir"])
-        if (uuid, email) != (c.get("uuid"), c.get("email")) and (uuid or c.get("uuid")):
-            c["uuid"], c["email"] = uuid, email if uuid else None
+        email, login = identity(c["dir"])
+        if (login, email) != (c.get("login"), c.get("email")) and (login or c.get("login")):
+            c["login"], c["email"] = login, email if login else None
             changed = True
     return _duplicates(lst) or changed
 
@@ -225,8 +255,8 @@ def _refresh(lst):
 def _import():
     lst = {"version": 1, "accounts": []}
     for d in _candidates():
-        email, uuid = identity(d)
-        lst["accounts"].append({"name": name_of(d), "dir": short(d), "email": email, "uuid": uuid,
+        email, login = identity(d)
+        lst["accounts"].append({"name": name_of(d), "dir": short(d), "email": email, "login": login,
                                 "active": True, "duplicate_of": None, "since": _now_text()})
     _duplicates(lst)
     return lst
@@ -304,7 +334,7 @@ def connect(name=None):
             d = "~/.claude-" + name
             # an empty folder: Claude Code fills it at first start; nothing is copied or linked from another account
             os.makedirs(path(d), mode=0o700, exist_ok=True)
-            c = {"name": name, "dir": d, "email": None, "uuid": None, "active": True, "duplicate_of": None,
+            c = {"name": name, "dir": d, "email": None, "login": None, "active": True, "duplicate_of": None,
                  "since": _now_text()}
             lst["accounts"].append(c)
             _refresh(lst)

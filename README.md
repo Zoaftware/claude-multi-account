@@ -45,10 +45,10 @@ macOS; elsewhere the plugin prints the command to run.
 
     CLAUDE_CONFIG_DIR="$HOME/.claude-<name>" claude
 
-The plugin never reads, stores or sends a password or a token. It recognizes an account only by the non-secret
-`oauthAccount` block (email and account id) that Claude Code writes in that folder's `.claude.json` when you sign in,
-so two folders with the same login count once ("duplicate of main"). It never measures usage and makes no network
-call of its own.
+The plugin never reads, stores or sends a password or a token, and it never opens Claude Code's own files. To know
+who is signed in to a folder it asks Claude Code itself (`claude auth status --json` for that folder) and keeps only
+the email, so two folders with the same login count once ("duplicate of main"). It never measures usage and makes no
+network call of its own.
 
 **Running a task.** `/multi-account:split <task>` (or a chat message that starts with `all:`) plans independent pieces,
 saves your uncommitted work in a wip commit, and starts one headless `claude -p` worker per piece, at most 6 at once

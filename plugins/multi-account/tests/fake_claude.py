@@ -8,7 +8,9 @@ then "commit":
   outside    also write shared.txt (outside its files): two of these make a merge conflict
   sleep      sleep 60 s (to test stopping a run)
   no-report  commit, but no report file: only the final answer says RESULT: DONE
-Every call appends one JSON line to FAKE_LEDGER: account, piece, mode, argv, whether a parent token leaked."""
+Every call appends one JSON line to FAKE_LEDGER: account, piece, mode, argv, whether a parent session variable
+leaked. `claude auth status --json` answers from the folder's test file .fake-auth.json ({"email": ...}) and is not
+written to the ledger."""
 import json
 import os
 import re
@@ -16,8 +18,16 @@ import subprocess
 import sys
 import time
 
-prompt = sys.argv[-1]
 cfg = os.environ.get("CLAUDE_CONFIG_DIR", "")
+if sys.argv[1:3] == ["auth", "status"]:
+    folder = cfg or os.path.join(os.environ.get("MA_HOME") or os.path.expanduser("~"), ".claude")
+    try:
+        email = json.load(open(os.path.join(folder, ".fake-auth.json")))["email"]
+        print(json.dumps({"loggedIn": True, "authMethod": "claude.ai", "email": email}))
+    except (OSError, ValueError, KeyError):
+        print(json.dumps({"loggedIn": False}))
+    sys.exit(0)
+prompt = sys.argv[-1]
 account = os.path.basename(cfg).replace(".claude-", "") if cfg else "main"
 field = lambda k: (re.findall(r"^%s: (.*)$" % k, prompt, re.M) or [""])[-1].strip()
 rep, files, branch = field("MA-REPORT"), [f for f in field("MA-FILES").split(",") if f], field("MA-BRANCH")
@@ -27,7 +37,7 @@ mode = script.get("piece:" + piece) or script.get(account) or "commit"
 join = "You join one piece" in prompt
 with open(os.environ["FAKE_LEDGER"], "a") as f:
     f.write(json.dumps({"account": account, "piece": piece, "mode": "join" if join else mode, "argv": sys.argv[1:-1],
-                        "leak": any(k in os.environ for k in ("CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SESSION_ID")),
+                        "leak": any(k.startswith(("CLAUDE_CODE_", "ANTHROPIC_")) for k in os.environ),
                         "cwd": os.getcwd()}) + "\n")
 git = lambda *a: subprocess.run(["git"] + list(a), capture_output=True, text=True)
 

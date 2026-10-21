@@ -24,9 +24,9 @@ path, use the newest installed copy: `python3 "$(ls -d ~/.claude/plugins/cache/*
   from another account: that folder starts like a fresh install.
 - The user signs in there with that account's email. Never ask for, type or read a password or a token: the sign-in
   is theirs, in their own window.
-- After they sign in, run `MA connect <name>` again: it reads the non-secret account id that Claude Code wrote at
-  sign-in, refuses a login that is already connected (the same account in two folders counts once) and shows the
-  account as ready.
+- After they sign in, run `MA connect <name>` again: it asks Claude Code who is signed in there
+  (`claude auth status`, email only), refuses a login that is already connected (the same account in two folders
+  counts once) and shows the account as ready.
 - Each account must be the user's own, on its own paid plan. Never help share an account with another person.
 
 ## States
