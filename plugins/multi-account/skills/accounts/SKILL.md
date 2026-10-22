@@ -32,8 +32,9 @@ path, use the newest installed copy: `python3 "$(ls -d ~/.claude/plugins/cache/*
 ## States
 
 - **ready**: takes work.
-- **full until <time>**: one of its workers printed Claude Code's usage-limit message; it takes no new piece until
-  the reset time that message named (or one hour when it named none).
+- **full until <time> (limit seen <time>)**: one of its workers printed Claude Code's usage-limit message at the
+  second time; it takes no new piece until the reset time that message named (or one hour when it named none, which
+  the row says).
 - **paused**, **not signed in**, **duplicate of <name>**: takes no work; say what the user can do about it.
 
 ## Reply

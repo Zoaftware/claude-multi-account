@@ -66,7 +66,8 @@ move your branch in the meantime. `/multi-account:status` shows the run and stop
 
 **When an account is full.** When a worker prints Claude Code's usage-limit message, that account is marked full until
 the reset time the message names (for example "resets 5pm", read in your local time), or for one hour when it names
-none. Its piece moves to another ready account, and no new piece starts on it until that time has passed.
+none. Its piece moves to another ready account, and no new piece starts on it until that time has passed. The
+accounts table says both times, for example `full until today 17:00 (limit seen today 14:12)`.
 
 **Data folder.** Everything the plugin writes lives in `~/.multi-account` (or `$MULTI_ACCOUNT_HOME`), outside every
 `.claude` folder: `accounts.json`, `full.json`, `runs/<id>/` (the run, its watcher log, worker logs and

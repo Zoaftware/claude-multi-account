@@ -163,6 +163,22 @@ class Lib(unittest.TestCase):
         self.assertAlmostEqual(self.A.full_until("a", now), now + 3600, delta=2)
         self.assertEqual(self.S.split(1, self.rows("a", "b"), now=now + 1), [])
 
+    def test_a_full_row_says_when_the_limit_was_seen(self):
+        now = time.time()
+        self.A.mark_full("b", "You've hit your session limit · resets 5pm", now)
+        m = self.A.full_mark("b", now)
+        self.assertTrue(m["named"])
+        self.assertEqual(self.A.full_label(m), "full until %s (limit seen %s)" % (self.A.hour(m["until"]),
+                                                                                  self.A.hour(now)))
+        self.A.mark_full("a", "usage limit reached", now)  # no time in the message: one hour, and the row says so
+        self.assertEqual(self.A.full_label(self.A.full_mark("a", now)),
+                         "full until %s (limit seen %s, no reset time in the message: one hour)"
+                         % (self.A.hour(now + 3600), self.A.hour(now)))
+        # a mark written by an older version (no "named") still reads, without the one-hour note
+        self.assertEqual(self.A.full_label({"until": now + 60, "since": now}),
+                         "full until %s (limit seen %s)" % (self.A.hour(now + 60), self.A.hour(now)))
+        self.assertIsNone(self.A.full_mark("b", now=m["until"] + 1))
+
     def test_relay_picks_the_least_loaded_ready_account(self):
         rows = self.rows("a", "b", "c")
         self.assertEqual(self.S.relay(rows, exclude={"a"}, load={"b": 2, "c": 1}), "c")
@@ -303,6 +319,7 @@ class Runs(unittest.TestCase):
         self.assertFalse(run["advance"]["done"])  # no project test: the owner's branch is left alone
         self.assertIn("work -> ", self.m.file(rid, "REPORT.md"))
         self.assertIn("full until", self.m.ma("accounts").stdout)
+        self.assertIn("(limit seen today ", self.m.ma("accounts").stdout)
         # until the reset, a new run never starts a piece on the full account
         self.m.script = {}
         before = len(self.m.calls())

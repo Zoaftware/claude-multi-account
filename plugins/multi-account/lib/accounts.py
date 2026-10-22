@@ -182,19 +182,34 @@ def _write(f, data):
 def mark_full(name, message, now=None):
     """A worker on this account printed the usage-limit message: keep it out until the reset it names."""
     now = now or time.time()
-    until = reset_from_message(message, now) or now + FULL_DEFAULT_S
+    named = reset_from_message(message, now)
+    until = named or now + FULL_DEFAULT_S
     with lock():
         marks = _read(FULL, {})
-        marks[name] = {"until": until, "since": now, "message": (message or "").strip()[:200]}
+        marks[name] = {"until": until, "since": now, "named": bool(named), "message": (message or "").strip()[:200]}
         _write(FULL, marks)
     return until
 
 
-def full_until(name, now=None):
-    """The reset time of a full account, or None once that time has passed (it takes work again)."""
+def full_mark(name, now=None):
+    """The full mark of an account ({until, since, named, message}), or None once its reset time has passed."""
     now = now or time.time()
     m = _read(FULL, {}).get(name)
-    return m["until"] if m and m.get("until", 0) > now else None
+    return m if m and m.get("until", 0) > now else None
+
+
+def full_until(name, now=None):
+    """The reset time of a full account, or None once that time has passed (it takes work again)."""
+    m = full_mark(name, now)
+    return m["until"] if m else None
+
+
+def full_label(m):
+    """"full until <reset> (limit seen <time>)": when the limit was seen, and when the account takes work again."""
+    seen = "limit seen %s" % hour(m["since"]) if m.get("since") else ""
+    if m.get("named") is False:
+        seen += ", no reset time in the message: one hour"
+    return "full until %s%s" % (hour(m["until"]), " (%s)" % seen if seen else "")
 
 
 # ---------- the list ----------
@@ -291,9 +306,9 @@ def state(c, now=None):
         return "not-signed-in", "not signed in"
     if not c.get("active", True):
         return "paused", "paused"
-    until = full_until(c["name"], now)
-    if until:
-        return "full", "full until %s" % hour(until)
+    m = full_mark(c["name"], now)
+    if m:
+        return "full", full_label(m)
     return "ready", "ready"
 
 
