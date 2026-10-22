@@ -215,25 +215,6 @@ export const register: Register = on => {
     return { ...r, decorations: [...(r.decorations ?? []), { start: k.from, end: k.end, color: 'claude', bold: true }] }
   })
 
-  // The first word of a message offers "all:" and every account, each with where it would go.
-  on('prompt.autocomplete', async ($, e, next) => {
-    const r = await next(e)
-    if (e.start !== 0 || e.token.length < 2 || e.token.includes(':')) return r
-
-    const { real, ready } = usable(await read($, data))
-    const t = e.token.toLowerCase()
-    const rows = [
-      {
-        text: ALL + ': ',
-        label: ALL + ':',
-        description: ready.length ? 'split across ' + names(ready) : 'split (no account is ready now)',
-      },
-      ...real.map(c => ({ text: c.name + ': ', label: c.name + ':', description: 'this account only · ' + accountState(c) })),
-    ].filter(f => f.label.toLowerCase().startsWith(t))
-
-    return rows.length ? { suggestions: [...r.suggestions, ...rows] } : r
-  })
-
   // Above the prompt: where the draft goes while it starts with a route word, else a way back to a closed pane.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)

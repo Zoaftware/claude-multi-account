@@ -1,4 +1,4 @@
-import type { Args, On, PromptAutocompleteResult, PromptEditResult } from 'claude-code'
+import type { Args, On, PromptEditResult } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 const PANE = {
@@ -225,7 +225,6 @@ function chat(on: On, box = 'fix the login') {
     const { Box } = $.ui.resolve(e)
     return <Box key="engine" />
   })
-  on('prompt.autocomplete', () => ({ suggestions: [{ text: '/clear', label: '/clear' }] }))
   on('prompt.read', () => ({ value: { text: box, cursor: box.length } }))
   on('prompt.fill', (_, e) => {
     filled.push({ text: e.text, decorations: e.decorations })
@@ -240,7 +239,6 @@ const composer = { kind: 'composer' } as const
 type Raised = {
   prompt: {
     edit: (e: Args<'prompt.edit'>) => Promise<PromptEditResult>
-    autocomplete: (e: Args<'prompt.autocomplete'>) => Promise<PromptAutocompleteResult>
   }
 }
 const raised = ($: unknown) => $ as Raised
@@ -331,19 +329,12 @@ test('while no surface draws the pane, a button above the chat opens it again', 
   await after.unmount()
 })
 
-test('the first word offers "all:" and every account; the pane button writes "all:" in the chat', async ($, on) => {
+test('the pane button writes "all:" in the chat', async ($, on) => {
   const clock = mock.clock(on)
   engine(on)
   const { filled } = chat(on, 'work: fix the login')
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await clock.settle()
-
-  const r = await raised($).prompt.autocomplete({ text: 'sp', cursor: 2, token: 'sp', start: 0 })
-  expect(r.suggestions.map(x => x.label)).toEqual(['/clear', 'spare:'])
-  const a = await raised($).prompt.autocomplete({ text: 'al', cursor: 2, token: 'al', start: 0 })
-  expect(a.suggestions[1]).toEqual({ text: 'all: ', label: 'all:', description: 'split across work' })
-  const middle = await raised($).prompt.autocomplete({ text: 'hello al', cursor: 8, token: 'al', start: 6 })
-  expect(middle.suggestions.length).toBe(1)
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'chat-all' })

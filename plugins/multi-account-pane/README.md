@@ -14,8 +14,7 @@ A pane beside the Claude Code chat for the `multi-account` plugin, and the chat 
 - Any other message stays in this session, as always.
 
 While typing, the route word is painted and a band above the prompt says where Enter sends the task (the accounts
-that will take it, or why that account will not take it now). The first word's autocomplete offers `all:` and every
-connected account. A route word with no task after it is not sent.
+that will take it, or why that account will not take it now). A route word with no task after it is not sent.
 
 ## The pane
 
