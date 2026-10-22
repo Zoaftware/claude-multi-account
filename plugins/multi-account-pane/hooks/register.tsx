@@ -22,10 +22,6 @@ const confirm = atom({ plugin: 'multi-account-pane', key: 'confirm' } as const, 
 const isOpen = atom({ plugin: 'multi-account-pane', key: 'open' } as const, false)
 const target = atom({ plugin: 'multi-account-pane', key: 'target' } as const, null)
 
-// The pane runs the multi-account plugin's own CLI through one named script of its own, which finds that plugin
-// installed beside this one (lib/run-multi-account.py says where it looks).
-const RUNNER = 'lib/run-multi-account.py'
-
 type Tone = 'success' | 'error' | 'warning' | 'inactive'
 
 const SIGN: Record<Tone, string> = { success: '✓', error: '✗', warning: '●', inactive: '■' }
@@ -50,9 +46,11 @@ const RUN: Record<string, Tone> = {
 
 let timer: { cancel: () => void } | undefined
 
+// The pane runs the multi-account plugin's own CLI through one named script of its own, from this plugin's folder;
+// the script finds that plugin installed beside this one (lib/run-multi-account.py says where it looks).
 async function ma($: EngineInterface, args: string[]) {
-  const r = await $.process.run(['/usr/bin/python3', `${$.plugin.root}/${RUNNER}`, ...args], {
-    cwd: '/tmp',
+  const r = await $.process.run(['/usr/bin/python3', 'lib/run-multi-account.py', ...args], {
+    cwd: $.plugin.root,
     timeoutMs: WAIT_MS,
   })
   return { ok: r.exitCode === 0, out: (r.stdout || '').trim(), err: (r.stderr || '').trim() }

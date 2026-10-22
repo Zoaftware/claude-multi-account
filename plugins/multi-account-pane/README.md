@@ -36,10 +36,10 @@ opens it again; `/accounts-pane` opens it too.
 
 ## What it runs, reads and sends
 
-- **One program, by name.** Every refresh and every button runs `/usr/bin/python3 lib/run-multi-account.py <words>`,
-  a script in this plugin. The script finds the `multi-account` plugin installed beside this one
-  (`../multi-account/lib/ma.py` in this repository, else the newest `multi-account/<version>/lib/ma.py` in the same
-  Claude Code plugin cache) and runs its CLI with these words only:
+- **One program, by name.** Every refresh and every button runs `/usr/bin/python3 lib/run-multi-account.py <words>`
+  from this plugin's folder, with a script this plugin ships. The script finds the `multi-account` plugin installed
+  beside this one (`../multi-account/lib/ma.py` in this repository, else the newest
+  `multi-account/<version>/lib/ma.py` in the same Claude Code plugin cache) and runs its CLI with these words only:
   - `pane`, every 30 seconds: the accounts, the last run and the artifact copies, as JSON;
   - `pause <account>`, `resume <account>` and `stop <run>`, from their buttons;
   - `connect [<account>]`, which opens the sign-in window (`osascript` on macOS);

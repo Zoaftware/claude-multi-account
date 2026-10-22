@@ -81,9 +81,11 @@ function engine(on: On, opts: { pane?: string; out?: string; exitCode?: number }
     return {}
   })
   on('process.run', (_, e) => {
-    // One named script of the pane's own, never inline code: argv is python3, that script, then the CLI's words.
-    if (e.argv[0] !== '/usr/bin/python3' || !e.argv[1].endsWith('/lib/run-multi-account.py')) {
-      throw new Error('unexpected command: ' + e.argv.slice(0, 2).join(' '))
+    // One named script of the pane's own, never inline code: argv is python3, that script, then the CLI's words,
+    // run from the plugin's own folder (run.sh tests a copy named multi-account-pane).
+    const cwd = e.init?.cwd ?? ''
+    if (e.argv[0] !== '/usr/bin/python3' || e.argv[1] !== 'lib/run-multi-account.py' || !cwd.endsWith('/multi-account-pane')) {
+      throw new Error('unexpected command: ' + e.argv.slice(0, 2).join(' ') + ' in ' + e.init?.cwd)
     }
     const args = e.argv.slice(2)
     calls.push(args)
