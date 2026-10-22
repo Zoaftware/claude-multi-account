@@ -88,7 +88,7 @@ No AI, no sign-in, no network: the engine's tests use a fake `claude` and a fake
 `tests/`, outside the plugin folder, so installing the plugin copies only the code that runs.
 
     python3 tests/multi-account/test_multi_account.py -v
-    claude plugin test plugins/multi-account-pane
+    sh tests/multi-account-pane/run.sh
 
 ## Privacy, terms and support
 

@@ -1,12 +1,23 @@
 {
   "name": "multi-account-pane",
-  "version": "1.0.0",
+  "displayName": "Multi-account pane",
+  "version": "1.0.1",
   "description": "A pane beside the chat for the multi-account plugin: every account's state, the last run and the newest artifacts; start a message with all: to split it across your accounts, or with an account name to send it to that one",
   "author": {
     "name": "Zoaftware",
     "url": "https://zoaftware.com"
   },
   "homepage": "https://zoaftware.com",
+  "repository": "https://github.com/Zoaftware/claude-multi-account",
+  "documentationUrl": "https://github.com/Zoaftware/claude-multi-account/tree/main/plugins/multi-account-pane#readme",
+  "supportUrl": "https://github.com/Zoaftware/claude-multi-account/issues",
+  "privacyPolicyUrl": "https://github.com/Zoaftware/claude-multi-account/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/Zoaftware/claude-multi-account/blob/main/TERMS.md",
   "license": "MIT",
+  "keywords": [
+    "accounts",
+    "pane",
+    "parallel"
+  ],
   "types": "./types/index.d.ts"
 }

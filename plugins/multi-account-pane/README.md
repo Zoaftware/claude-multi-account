@@ -38,6 +38,9 @@ The pane runs the newest installed `multi-account` CLI (`lib/ma.py`), found by v
 
 ## Tests
 
-    claude plugin test plugins/multi-account-pane
+They live in `tests/multi-account-pane/` at the repository root, outside the plugin folder, and run against a
+temporary copy of the plugin:
+
+    sh tests/multi-account-pane/run.sh
 
 Made by [Zoaftware](https://zoaftware.com).
