@@ -7,7 +7,8 @@ The multi-account plugins collect no data about you and send nothing to Zoaftwar
   account's own terms.
 - **No passwords or tokens.** The plugins never read, store or send a password or a token, and never open Claude
   Code's own files. To know who is signed in to a folder they ask Claude Code (`claude auth status --json`) and keep
-  only the email.
+  only the email. Inside a session they also read the email Claude Code gives its own tools, to mark the account that
+  session runs on; it is not stored.
 - **What is stored, and where.** The list of your accounts (name, folder, email), run plans, worker logs and reports,
   in `~/.multi-account` (or `$MULTI_ACCOUNT_HOME`) on your own computer. Delete that folder to remove all of it.
 - **No analytics, no telemetry, no ads.**

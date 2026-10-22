@@ -14,6 +14,11 @@ Code itself who is signed in, with `claude auth status --json` run for that fold
 the answer. Usage is never measured: an account is "full" only after one of its workers printed Claude Code's
 usage-limit message, until the reset time that message names (or one hour).
 
+Inside a Claude Code session it also reads the email Claude Code gives its own tools (CLAUDE_CODE_USER_EMAIL, no
+secret), to mark the account this session runs on. In the Claude app that email also settles one case: the app writes
+its own account into ~/.claude, so when another folder is signed in to that same account, that folder owns it and the
+main row's own login is unknown from here (it takes no work).
+
 Data folder: $MULTI_ACCOUNT_HOME, else ~/.multi-account (outside every .claude folder, so workers may write
 reports there). Tests replace the machine with MA_HOME (the home
 folder), MA_CLAUDE (the `claude` command) and MA_NO_OPEN (never open a window).
@@ -112,6 +117,18 @@ def signed_in(d):
     return bool(identity(d)[1])
 
 
+def this_session():
+    """The login of the account this Claude Code session runs on, from the email Claude Code gives its own tools; None
+    outside a session."""
+    e = (os.environ.get("CLAUDE_CODE_USER_EMAIL") or "").strip().lower()
+    return e if "@" in e else None
+
+
+def in_app():
+    """True inside the Claude app (its sessions name the app version)."""
+    return bool(os.environ.get("CLAUDE_CODE_DESKTOP_APP_VERSION"))
+
+
 # ---------- time ----------
 
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -182,19 +199,34 @@ def _write(f, data):
 def mark_full(name, message, now=None):
     """A worker on this account printed the usage-limit message: keep it out until the reset it names."""
     now = now or time.time()
-    until = reset_from_message(message, now) or now + FULL_DEFAULT_S
+    named = reset_from_message(message, now)
+    until = named or now + FULL_DEFAULT_S
     with lock():
         marks = _read(FULL, {})
-        marks[name] = {"until": until, "since": now, "message": (message or "").strip()[:200]}
+        marks[name] = {"until": until, "since": now, "named": bool(named), "message": (message or "").strip()[:200]}
         _write(FULL, marks)
     return until
 
 
-def full_until(name, now=None):
-    """The reset time of a full account, or None once that time has passed (it takes work again)."""
+def full_mark(name, now=None):
+    """The full mark of an account ({until, since, named, message}), or None once its reset time has passed."""
     now = now or time.time()
     m = _read(FULL, {}).get(name)
-    return m["until"] if m and m.get("until", 0) > now else None
+    return m if m and m.get("until", 0) > now else None
+
+
+def full_until(name, now=None):
+    """The reset time of a full account, or None once that time has passed (it takes work again)."""
+    m = full_mark(name, now)
+    return m["until"] if m else None
+
+
+def full_label(m):
+    """"full until <reset> (limit seen <time>)": when the limit was seen, and when the account takes work again."""
+    seen = "limit seen %s" % hour(m["since"]) if m.get("since") else ""
+    if m.get("named") is False:
+        seen += ", no reset time in the message: one hour"
+    return "full until %s%s" % (hour(m["until"]), " (%s)" % seen if seen else "")
 
 
 # ---------- the list ----------
@@ -232,10 +264,23 @@ def name_of(d):
     return "main" if is_main(d) else short(d).split(".claude-", 1)[1]
 
 
+def app_shadowed(lst):
+    """The main row when, inside the Claude app, it only shows the app's account: the app writes its own account into
+    ~/.claude, so when another folder is signed in to that account, that folder owns it and the login a `claude` run in
+    ~/.claude uses is unknown from here. None otherwise."""
+    app = this_session() if in_app() else None
+    m = next((c for c in lst["accounts"] if is_main(c["dir"])), None)
+    if app and m and m.get("login") == app and any(c is not m and c.get("login") == app for c in lst["accounts"]):
+        return m
+    return None
+
+
 def _duplicates(lst):
-    """The first row with a login owns it; a later row with the same login is a duplicate of the first."""
+    """The first row with a login owns it; a later row with the same login is a duplicate of the first. A main row the
+    Claude app shadows comes last, so the other folder owns the app's account."""
     owners, changed = {}, False
-    for c in lst["accounts"]:
+    shadow = app_shadowed(lst)
+    for c in sorted(lst["accounts"], key=lambda c: c is shadow):  # stable: only the shadowed main row moves
         before = c.get("duplicate_of")
         u = c.get("login")
         c["duplicate_of"] = owners[u] if u and u in owners else None
@@ -284,16 +329,18 @@ def row(lst, name):
 
 
 def state(c, now=None):
-    """(key, label) of one row: duplicate, not-signed-in, paused, full, ready."""
+    """(key, label) of one row: unknown, duplicate, not-signed-in, paused, full, ready."""
     if c.get("duplicate_of"):
+        if is_main(c["dir"]) and in_app() and c.get("login") == this_session():
+            return "unknown", "login unknown in the Claude app"
         return "duplicate", "duplicate of %s" % c["duplicate_of"]
     if not signed_in(c["dir"]):
         return "not-signed-in", "not signed in"
     if not c.get("active", True):
         return "paused", "paused"
-    until = full_until(c["name"], now)
-    if until:
-        return "full", "full until %s" % hour(until)
+    m = full_mark(c["name"], now)
+    if m:
+        return "full", full_label(m)
     return "ready", "ready"
 
 
@@ -372,5 +419,20 @@ def change(name, action):
             _duplicates(lst)
         else:
             c["active"] = action == "resume"
+        _write(LIST, lst)
+    return c
+
+
+def set_role(name, role):
+    """Give an account a role (plan, design, dev or audit: it then takes only that stage), or None to take it away."""
+    with lock():
+        lst = json.load(open(LIST))
+        c = row(lst, name)
+        if c is None:
+            raise ValueError("there is no account '%s'" % name)
+        if role:
+            c["role"] = role
+        else:
+            c.pop("role", None)
         _write(LIST, lst)
     return c

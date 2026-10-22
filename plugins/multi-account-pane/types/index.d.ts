@@ -12,7 +12,8 @@ export type Account = {
 export type Piece = {
   id: string
   title: string
-  account: string
+  account: string | null
+  stage?: string
   state: string
   state_text: string
   minutes: number | null
