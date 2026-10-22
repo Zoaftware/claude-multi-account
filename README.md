@@ -90,6 +90,10 @@ No AI, no sign-in, no network: the engine's tests use a fake `claude` and a fake
     python3 tests/multi-account/test_multi_account.py -v
     claude plugin test plugins/multi-account-pane
 
+## Privacy, terms and support
+
+[Privacy](PRIVACY.md) · [Terms of use](TERMS.md) · Questions and bugs: [issues](https://github.com/Zoaftware/claude-multi-account/issues).
+
 ## License
 
 MIT. Made by [Zoaftware](https://zoaftware.com).

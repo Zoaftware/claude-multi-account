@@ -1,12 +1,18 @@
 {
   "name": "multi-account",
-  "version": "1.0.5",
+  "displayName": "Multi-account",
+  "version": "1.0.6",
   "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: split into pieces, one git worktree per piece, handed to another account when one hits its usage limit, joined and tested at the end; list every account's saved artifacts in one local page",
   "author": {
     "name": "Zoaftware",
     "url": "https://zoaftware.com"
   },
   "homepage": "https://zoaftware.com",
+  "repository": "https://github.com/Zoaftware/claude-multi-account",
+  "documentationUrl": "https://github.com/Zoaftware/claude-multi-account#readme",
+  "supportUrl": "https://github.com/Zoaftware/claude-multi-account/issues",
+  "privacyPolicyUrl": "https://github.com/Zoaftware/claude-multi-account/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/Zoaftware/claude-multi-account/blob/main/TERMS.md",
   "license": "MIT",
   "keywords": [
     "accounts",
