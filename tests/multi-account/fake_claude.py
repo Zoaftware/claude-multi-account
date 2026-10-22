@@ -18,8 +18,10 @@ import subprocess
 import sys
 import time
 
-# variables the tests plant in the parent; none of them may reach a `claude` run
-PROBES = ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ANTHROPIC_MODEL", "MA_UNLISTED")
+# variables the tests plant in the parent, each read by name; none of them may reach a `claude` run
+PROBES = {"CLAUDECODE": os.environ.get("CLAUDECODE"), "CLAUDE_CODE_SESSION_ID": os.environ.get("CLAUDE_CODE_SESSION_ID"),
+          "CLAUDE_CODE_ENTRYPOINT": os.environ.get("CLAUDE_CODE_ENTRYPOINT"),
+          "ANTHROPIC_MODEL": os.environ.get("ANTHROPIC_MODEL"), "MA_UNLISTED": os.environ.get("MA_UNLISTED")}
 cfg = os.environ.get("CLAUDE_CONFIG_DIR", "")
 home = os.path.expanduser("~")
 if sys.argv[1:3] == ["auth", "status"]:
@@ -40,7 +42,7 @@ mode = script.get("piece:" + piece) or script.get(account) or "commit"
 join = "You join one piece" in prompt
 with open(os.path.join(home, "ledger.jsonl"), "a") as f:
     f.write(json.dumps({"account": account, "piece": piece, "mode": "join" if join else mode, "argv": sys.argv[1:-1],
-                        "leak": [k for k in PROBES if k in os.environ],
+                        "leak": [k for k, v in PROBES.items() if v is not None],
                         "cwd": os.getcwd()}) + "\n")
 git = lambda *a: subprocess.run(["git"] + list(a), capture_output=True, text=True)
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """multi-account tests: no AI, no login secrets, no network. Each test builds a fake home (config folders, a git
-project) and runs ma.py as the user would; `claude` (sign-in checks and workers) is tests/fake_claude.py.
+project) and runs ma.py as the user would; `claude` (sign-in checks and workers) is fake_claude.py next to this
+file. They live outside the plugin folder, so an install carries only what runs.
 
-    python3 -m unittest discover -s plugins/multi-account/tests -v
+    python3 tests/multi-account/test_multi_account.py -v
 """
 import json
 import os
@@ -14,7 +15,7 @@ import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LIB = os.path.join(os.path.dirname(HERE), "lib")
+LIB = os.path.join(os.path.dirname(os.path.dirname(HERE)), "plugins", "multi-account", "lib")
 MA = os.path.join(LIB, "ma.py")
 FAKE = os.path.join(HERE, "fake_claude.py")
 NEVER_MODE = "bypass" + "Permissions"  # the permission mode a worker must never get

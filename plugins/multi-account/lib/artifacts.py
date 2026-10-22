@@ -1,10 +1,10 @@
 """Every account's artifacts in one place, without switching accounts.
 
-A claude.ai artifact link opens only for the account that owns it; a local copy opens in any browser, so a folder of
+An artifact's own link opens only for the account that owns it; a local copy opens in any browser, so a folder of
 local copies is the one way to see all of them without signing out and in. This plugin does not make the copies:
 it reads a folder you (or your own hook) fill, one subfolder per artifact:
 
-    <artifacts>/<artifact id>/_meta.json   {"url": "https://claude.ai/...",
+    <artifacts>/<artifact id>/_meta.json   {"url": "<its link>",
                                             "publishes": [{"when": "20261021-150200", "files": ["index.html"],
                                                            "account": "~/.claude-work2", "description": "...",
                                                            "capabilities": {}, "type_url": null}]}

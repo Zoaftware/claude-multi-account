@@ -84,9 +84,10 @@ that you fill (`$MULTI_ACCOUNT_ARTIFACTS`, else `~/.multi-account/artifacts`). T
 
 ## Tests
 
-No AI, no sign-in, no network: the engine's tests use a fake `claude` and a fake home folder.
+No AI, no sign-in, no network: the engine's tests use a fake `claude` and a fake home folder. They live in
+`tests/`, outside the plugin folder, so installing the plugin copies only the code that runs.
 
-    python3 plugins/multi-account/tests/test_multi_account.py -v
+    python3 tests/multi-account/test_multi_account.py -v
     claude plugin test plugins/multi-account-pane
 
 ## License
