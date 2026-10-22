@@ -4,7 +4,8 @@ Two Claude Code plugins for people who have more than one Claude account of thei
 
 - **multi-account**: connect your accounts one at a time, then run one task on all of them at once. The task is split
   into independent pieces, each piece gets its own git worktree and an account, a piece moves to another account when
-  one hits its usage limit, and everything is joined and tested at the end in a separate worktree.
+  one hits its usage limit, and everything is joined and tested at the end in a separate worktree. Accounts can have
+  roles: one only plans, one only designs, one only develops, one only audits.
 - **multi-account-pane**: a pane beside the chat with every account's state, the last run and the newest artifacts.
   Start a chat message with `all:` to split it across your accounts, or with an account's name (`work:`) to send it
   to that one account.
@@ -63,8 +64,26 @@ saves your uncommitted work in a wip commit, and starts one headless `claude -p`
 on this computer, spread evenly over the ready accounts. Each worker may only edit its piece's files and use git in
 its own worktree (permission mode `acceptEdits` with a fixed list of allowed tools). A detached watcher checks them,
 joins the finished branches in plan order into `ma/<run>/joined`, turns a merge conflict into a join piece for
-another account, runs the project's test, and moves your branch forward only when the test passed and you did not
-move your branch in the meantime. `/multi-account:status` shows the run and stops it.
+another account, runs the project's test, and moves your branch forward only when the test passed (and the audit,
+when there is one) and you did not move your branch in the meantime. `/multi-account:status` shows the run and stops
+it.
+
+**Roles: one account plans, one designs, one develops, one audits.** An account can be limited to one stage of every
+task, saved with `/multi-account:accounts roles work=audit team=dev` (`general` or `--clear` takes it away), or set
+for one task only with `split --roles ...`. A task then goes through its stages in order:
+
+- **plan**: the planner reads the project and writes the pieces (each with its own files) for the developers.
+- **design**: the designer writes the design that every developer's prompt points to.
+- **dev**: the developers build the pieces at the same time, one worktree each.
+- **audit**: the auditor reads the joined work, its diff and the project's test result, and answers PASS or FAIL with
+  its findings. A FAIL goes to a developer as a fix on the joined branch, then the auditor checks again (3 audits at
+  most, `MA_AUDIT_ROUNDS`). Your branch moves only when the audit passed.
+
+An account with a role takes only that stage; an account with no role takes any stage, but only when no account with
+that stage's role is ready. A run with a stage nobody may ever take is refused before it starts. Planner, designer and
+auditor only read the project (Read, Glob, Grep and read-only git, working from the run's report folder); one that
+changes a project file fails at once and its stage is not handed on. `split --stages audit` (or `plan`, `design`) adds
+a stage with no role behind it, done by an account with no role. With `--account`, roles do not apply.
 
 **When an account is full.** When a worker prints Claude Code's usage-limit message, that account is marked full until
 the reset time the message names (for example "resets 5pm", read in your local time), or for one hour when it names

@@ -1,7 +1,7 @@
 ---
 name: accounts
-description: Show every connected Claude account (email, state, live workers), connect a new one (one at a time, as many as you own), or pause, resume or remove one. Use when the user types /multi-account:accounts, or asks to "connect another account", "add an account", "how many accounts do I have", "show my accounts", "pause account X".
-argument-hint: "[connect [name] | pause <name> | resume <name> | remove <name>]"
+description: Show every connected Claude account (email, state, live workers), connect a new one (one at a time, as many as you own), pause, resume or remove one, or give an account a role so it only plans, designs, develops or audits. Use when the user types /multi-account:accounts, or asks to "connect another account", "add an account", "how many accounts do I have", "show my accounts", "pause account X", "make work only audit", "one account only designs", "account roles".
+argument-hint: "[connect [name] | pause <name> | resume <name> | remove <name> | roles [name=role ...] [--clear]]"
 ---
 
 # Accounts
@@ -16,6 +16,23 @@ path, use the newest installed copy: `python3 "$(ls -d ~/.claude/plugins/cache/*
 | (none) | `MA accounts` |
 | `connect` or `connect <name>` | `MA connect [<name>]` |
 | `pause <name>` / `resume <name>` / `remove <name>` | `MA pause|resume|remove <name>` |
+| `roles` | `MA roles` (what each account does) |
+| `roles work=audit team=dev` | `MA roles work=audit team=dev` |
+| `roles work=general` / `roles --clear` | take one role away / take every role away |
+
+## Roles
+
+An account can be limited to one stage of every task: `plan`, `design`, `dev` or `audit` (`general` takes the role
+away). The user may say it in their words ("make work only audit", "team only develops"): turn that into
+`MA roles <name>=<role>`. What a role means for a task:
+- a task goes through its stages in order: planning -> design -> development -> audit; a role turns its stage on;
+- an account with a role only takes pieces of that stage; an account with no role takes any stage, but only when no
+  account with that stage's role is ready;
+- planner, designer and auditor only read the project; what the auditor finds goes to a developer and it audits again
+  (3 audits at most); the user's branch moves only when the audit passed;
+- `MA roles` warns when a stage has nobody who can do it (every account has another role).
+A role saved here applies to every task until it is taken away; for one task only, `/multi-account:split` takes
+`--roles`. When some account has a role, `MA accounts` shows a **Role** column.
 
 ## Connecting an account
 

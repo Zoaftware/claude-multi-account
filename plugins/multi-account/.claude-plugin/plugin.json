@@ -1,8 +1,8 @@
 {
   "name": "multi-account",
   "displayName": "Multi-account",
-  "version": "1.0.8",
-  "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: split into pieces, one git worktree per piece, handed to another account when one hits its usage limit, joined and tested at the end; list every account's saved artifacts in one local page",
+  "version": "1.0.9",
+  "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: split into pieces, one git worktree per piece, handed to another account when one hits its usage limit, joined, tested and optionally audited at the end; accounts can have roles (plan, design, dev, audit); list every account's saved artifacts in one local page",
   "author": {
     "name": "Zoaftware",
     "url": "https://zoaftware.com"

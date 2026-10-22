@@ -78,8 +78,8 @@ class World:
         json.dump(dict({"task": "test", "pieces": pieces}, **extra), open(f, "w"))
         return f
 
-    def start(self, pieces, test=None, max_local=None, account=None, **extra):
-        args = ["split", "--plan", self.plan(pieces), "--repo", self.repo, "--no-watcher"]
+    def start(self, pieces, test=None, max_local=None, account=None, more=(), **extra):
+        args = ["split", "--plan", self.plan(pieces), "--repo", self.repo, "--no-watcher"] + list(more)
         if test:
             args += ["--test", test]
         if account:
@@ -90,8 +90,8 @@ class World:
         assert r.returncode == 0, r.stderr + r.stdout
         return [l for l in r.stdout.splitlines() if l.startswith("ID=")][0][3:]
 
-    def run(self, pieces, test=None, max_local=None, account=None, **extra):
-        rid = self.start(pieces, test, max_local, account, **extra)
+    def run(self, pieces, test=None, max_local=None, account=None, more=(), **extra):
+        rid = self.start(pieces, test, max_local, account, more, **extra)
         w = self.ma("watch", rid, **extra)
         assert w.returncode == 0, w.stderr + w.stdout
         return rid, self.load(rid)
@@ -465,6 +465,159 @@ class Runs(unittest.TestCase):
             if p.get("pid"):
                 self.assertNotEqual(subprocess.run(["ps", "-p", str(p["pid"])], capture_output=True).returncode, 0,
                                     "worker %s is still alive" % p["id"])
+
+
+class Roles(unittest.TestCase):
+    """An account can be limited to one stage of a task: plan, design, dev or audit."""
+
+    def setUp(self):
+        self.m = World()
+        self.m.ma("connect", "team")
+        self.m.sign_in("~/.claude-team", "team@office")
+        self.base = self.m.git("rev-parse", "HEAD").strip()
+
+    def tearDown(self):
+        self.m.remove()
+
+    def row(self, name):
+        return [c for c in self.m.accounts()["accounts"] if c["name"] == name][0]
+
+    def test_set_show_and_clear_roles(self):
+        r = self.m.ma("roles", "work=audit", "team=Develop")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("'work' now only audits", r.stdout)
+        self.assertIn("development -> audit", r.stdout)
+        self.assertEqual(self.row("work")["role"], "audit")
+        self.assertEqual(self.row("team")["role"], "dev")
+        t = self.m.ma("accounts").stdout
+        self.assertIn("Role", t)
+        self.assertIn("only audits", t)
+        self.assertIn("'work' takes any stage again", self.m.ma("roles", "work=general").stdout)
+        self.assertNotIn("role", self.row("work"))
+        r = self.m.ma("roles", "nobody=audit")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("there is no account 'nobody'", r.stderr)
+        r = self.m.ma("roles", "work=cook")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unknown role 'cook'", r.stderr)
+        r = self.m.ma("roles", "main=audit", "work=audit", "team=audit")
+        self.assertIn("Nobody can develop", r.stdout)
+        self.m.ma("roles", "--clear")
+        self.assertFalse(any(c.get("role") for c in self.m.accounts()["accounts"]))
+        self.assertNotIn("Role", self.m.ma("accounts").stdout)
+
+    def test_saved_roles_split_every_stage(self):
+        self.m.ma("roles", "team=dev", "work=audit")
+        rid, run = self.m.run([piece("a", ["a.txt"]), piece("b", ["b.txt"])], test="test -f a.txt")
+        self.assertEqual(run["state"], "ready", self.m.file(rid, "watcher.log"))
+        self.assertEqual(run["stages"], ["dev", "audit"])
+        calls = self.m.calls()
+        self.assertEqual(sorted(l["account"] for l in calls if not l["role"]), ["team", "team"])
+        auditor = [l for l in calls if l["role"] == "audit"]
+        self.assertEqual([l["account"] for l in auditor], ["work"])
+        for tool in ("Edit", "Write", "MultiEdit", "--add-dir", NEVER_MODE):
+            self.assertNotIn(tool, auditor[0]["argv"])
+        self.assertEqual(os.path.realpath(auditor[0]["cwd"]),
+                         os.path.realpath(os.path.join(self.m.data, "worktrees", rid, "_reports")))
+        self.assertTrue(run["advance"]["done"])
+        self.assertTrue(os.path.exists(os.path.join(self.m.repo, "a.txt")))
+        report = self.m.file(rid, "REPORT.md")
+        self.assertIn("Audit, round 1: passed", report)
+        self.assertIn("work only audits", report)
+        st = self.m.ma("status", rid).stdout
+        self.assertIn("Stages:", st)
+        self.assertIn("audit, round 1", st)
+        self.assertEqual(json.loads(self.m.ma("pane").stdout)["run"]["stages"], "development -> audit")
+
+    def test_roles_for_one_run_and_a_correction(self):
+        self.m.script = {"audit": ["FAIL", "PASS"]}
+        rid, run = self.m.run([piece("a", ["a.txt"]), piece("b", ["b.txt"])], test="test -f a.txt",
+                              more=["--roles", "work=audit", "team=dev"])
+        self.assertEqual(run["state"], "ready", self.m.file(rid, "watcher.log"))
+        by_id = {p["id"]: p for p in run["pieces"]}
+        self.assertEqual(list(by_id), ["a", "b", "audit-1", "correct-1", "audit-2"])
+        self.assertEqual(by_id["audit-1"]["findings"], ["a.txt | the title is missing | add it"])
+        fix = by_id["correct-1"]
+        self.assertEqual((fix["account"], fix["state"], fix["files"]), ("team", "done", ["a.txt"]))
+        self.assertIn("Round 1 found these", self.m.file(rid, "logs/audit-2.1.prompt.md"))
+        self.assertIn("correct-1 done by team", open(os.path.join(self.m.repo, "a.txt")).read())
+        self.assertEqual([l["account"] for l in self.m.calls() if l["role"] == "audit"], ["work", "work"])
+        self.assertFalse(any(c.get("role") for c in self.m.accounts()["accounts"]))  # nothing was saved
+
+    def test_an_audit_that_never_passes_leaves_your_branch(self):
+        self.m.script = {"audit": "FAIL"}
+        rid, run = self.m.run([piece("a", ["a.txt"])], test="true", more=["--stages", "audit"])
+        self.assertEqual(run["state"], "audit-failed", self.m.file(rid, "watcher.log"))
+        self.assertEqual([p["id"] for p in run["pieces"]],
+                         ["a", "audit-1", "correct-1", "audit-2", "correct-2", "audit-3"])
+        self.assertFalse(run["advance"]["done"])
+        self.assertEqual(self.m.git("rev-parse", "HEAD").strip(), self.base)
+        self.assertIn("the audit found problems", self.m.file(rid, "REPORT.md"))
+
+    def test_the_planner_makes_the_pieces(self):
+        rid, run = self.m.run([], test="test -f one.txt && test -f two.txt", more=["--roles", "main=plan"])
+        self.assertEqual(run["state"], "ready", self.m.file(rid, "watcher.log"))
+        self.assertEqual(run["stages"], ["plan", "dev"])
+        self.assertEqual([p["id"] for p in run["pieces"]], ["plan", "one", "two"])
+        calls = self.m.calls()
+        self.assertEqual([(l["account"], l["role"]) for l in calls if l["role"]], [("main", "plan")])
+        self.assertNotIn("main", [l["account"] for l in calls if not l["role"]])
+        self.assertTrue(os.path.exists(os.path.join(self.m.repo, "two.txt")))
+
+    def test_the_designer_and_every_developer_reads_the_design(self):
+        rid, run = self.m.run([piece("a", ["a.txt"]), piece("b", ["b.txt"])], more=["--roles", "work=design"])
+        self.assertEqual(run["state"], "ready-untested", self.m.file(rid, "watcher.log"))
+        self.assertEqual(run["stages"], ["design", "dev"])
+        self.assertTrue(run["design"].endswith("design.md"))
+        self.assertIn("blue button", open(run["design"]).read())
+        self.assertIn("The design every developer follows is at %s" % run["design"],
+                      self.m.file(rid, "logs/a.1.prompt.md"))
+        calls = self.m.calls()
+        self.assertEqual([l["account"] for l in calls if l["role"] == "design"], ["work"])
+        self.assertNotIn("work", [l["account"] for l in calls if not l["role"]])
+
+    def test_a_full_developer_hands_on_to_a_general_account_never_to_the_auditor(self):
+        self.m.script = {"team": "limit"}
+        rid, run = self.m.run([piece("a", ["a.txt"])], test="test -f a.txt",
+                              more=["--roles", "team=dev", "work=audit"])
+        self.assertEqual(run["state"], "ready", self.m.file(rid, "watcher.log"))
+        calls = self.m.calls()
+        self.assertEqual([l["account"] for l in calls if not l["role"]], ["team", "main"])
+        self.assertEqual([l["account"] for l in calls if l["role"]], ["work"])
+
+    def test_nobody_can_develop(self):
+        plan = self.m.plan([piece("a", ["a.txt"])])
+        split = ["split", "--plan", plan, "--repo", self.m.repo, "--no-watcher"]
+        r = self.m.ma(*split, "--roles", "main=audit", "work=audit", "team=audit")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("nobody can do the development stage", r.stderr)
+        r = self.m.ma(*split, "--roles", "nobody=audit")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unknown account 'nobody'", r.stderr)
+        r = self.m.ma(*split, "--stages", "cook")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("'cook' is not a stage", r.stderr)
+        runs = os.path.join(self.m.data, "runs")
+        self.assertFalse(os.path.exists(runs) and os.listdir(runs))
+
+    def test_a_plan_with_shared_files_fails(self):
+        self.m.script = {"plan": {"pieces": [piece("x", ["src/"]), piece("y", ["src/y.txt"])]}}
+        rid, run = self.m.run([], test="true", more=["--roles", "main=plan"])
+        self.assertEqual(run["state"], "finished-with-failures", self.m.file(rid, "watcher.log"))
+        plan = run["pieces"][0]
+        self.assertEqual((plan["id"], plan["state"], len(plan["attempts"])), ("plan", "failed", 2))
+        self.assertIn("share", plan["reason"])
+        self.assertEqual([p["id"] for p in run["pieces"]], ["plan"])
+        self.assertEqual(self.m.git("rev-parse", "HEAD").strip(), self.base)
+
+    def test_an_auditor_that_touches_files_fails_with_no_relay(self):
+        self.m.script = {"audit": "touch"}
+        rid, run = self.m.run([piece("a", ["a.txt"])], test="true", more=["--roles", "work=audit"])
+        self.assertEqual(run["state"], "finished-with-failures", self.m.file(rid, "watcher.log"))
+        audit = [p for p in run["pieces"] if p["id"] == "audit-1"][0]
+        self.assertEqual((audit["state"], len(audit["attempts"])), ("failed", 1))
+        self.assertIn("the auditor changed files it could only read", audit["reason"])
+        self.assertEqual(self.m.git("rev-parse", "HEAD").strip(), self.base)
 
 
 class Artifacts(unittest.TestCase):

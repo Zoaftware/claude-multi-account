@@ -355,6 +355,8 @@ export const register: Register = on => {
     const pieceRow = (p: Piece) => {
       const [sign, tone] = PIECE[p.state] ?? ['•', 'inactive']
       const end = [unmarked(p.state_text), p.minutes === null ? '' : `${p.minutes} min`].filter(Boolean).join(' · ')
+      // a piece of a later stage (an audit, a fix) waits with no account while every account that may take it is full
+      const who = p.account ?? 'waiting'
       return (
         <Box key={'p-' + p.id} flexDirection="column" paddingLeft={2}>
           <Box flexDirection="row" gap={1}>
@@ -362,7 +364,7 @@ export const register: Register = on => {
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">{p.title}</Text>
             </Box>
-            <Text dimColor>{columns ? p.account.padEnd(11) + end.padStart(16) : p.account + ' · ' + end}</Text>
+            <Text dimColor>{columns ? who.padEnd(11) + end.padStart(16) : who + ' · ' + end}</Text>
           </Box>
           {p.state === 'failed' && p.reason !== '' && (
             <Box paddingLeft={2}>

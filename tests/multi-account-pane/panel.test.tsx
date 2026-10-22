@@ -141,6 +141,27 @@ test('the pane shows every account, the run and the artifacts, on every surface'
   }
 })
 
+test('a piece still waiting for an account shows as waiting, on every surface', async ($, on) => {
+  const clock = mock.clock(on)
+  const run = {
+    ...DATA.run,
+    pieces: [
+      ...DATA.run.pieces,
+      { id: 'audit-1', title: 'audit, round 1', account: null, stage: 'audit', state: 'pending', state_text: 'queued', minutes: null, commits: null, reason: '' },
+    ],
+  }
+  engine(on, { pane: JSON.stringify({ ...DATA, run }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.settle()
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect((await ui.find({ type: 'Text', text: 'audit, round 1' })) === undefined ? surface + ': no audit row' : 'ok').toBe('ok')
+    expect((await ui.find({ type: 'Text', text: /^waiting/ })) === undefined ? surface + ': no waiting' : 'ok').toBe('ok')
+    await ui.unmount()
+  }
+})
+
 test('the pane ends with one dim line that links to zoaftware.com', async ($, on) => {
   const clock = mock.clock(on)
   engine(on)

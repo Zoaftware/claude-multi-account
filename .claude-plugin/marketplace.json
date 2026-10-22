@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "multi-account",
-      "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: one git worktree per piece, handed to another account when one hits its limit, joined at the end",
+      "description": "Connect your own Claude accounts one at a time and run one task on all of them at once: one git worktree per piece, handed to another account when one hits its limit, joined at the end; accounts can have roles (plan, design, dev, audit)",
       "source": "./plugins/multi-account",
       "category": "productivity",
       "author": {

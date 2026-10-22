@@ -421,3 +421,18 @@ def change(name, action):
             c["active"] = action == "resume"
         _write(LIST, lst)
     return c
+
+
+def set_role(name, role):
+    """Give an account a role (plan, design, dev or audit: it then takes only that stage), or None to take it away."""
+    with lock():
+        lst = json.load(open(LIST))
+        c = row(lst, name)
+        if c is None:
+            raise ValueError("there is no account '%s'" % name)
+        if role:
+            c["role"] = role
+        else:
+            c.pop("role", None)
+        _write(LIST, lst)
+    return c

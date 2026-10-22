@@ -4,8 +4,11 @@
     ma.py accounts                      every account: email, state, live workers
     ma.py connect [name]                add ONE account (a new empty config folder + a sign-in window); again = check it
     ma.py pause|resume|remove NAME      take an account out of the split, or back in; remove keeps folder and login
+    ma.py roles [NAME=ROLE ...] [--clear]
+                                        what each account does: plan, design, dev, audit or general
     ma.py split --plan P --repo R [--test CMD] [--model M] [--effort E] [--budget USD] [--max-local N] [--account N]
-                                        start a run: worktrees, an account per piece, a detached watcher
+                [--roles NAME=ROLE ...] [--stages plan,design,audit]
+                                        start a run: its stages, worktrees, an account per piece, a detached watcher
     ma.py status [ID]                   the pieces of a run (the last one by default)
     ma.py pane                          every account, the last run and the newest artifacts as JSON, for the pane
     ma.py artifacts [--search T] [--account N] [--n N] [--json]
@@ -29,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import accounts as A  # noqa: E402
 import artifacts as R  # noqa: E402
 import join as J  # noqa: E402
+import roles as RL  # noqa: E402
 import workers as W  # noqa: E402
 
 hour = A.hour
@@ -70,6 +74,7 @@ def accounts_data():
         until = A.full_until(c["name"]) if key == "full" else None
         out.append({"name": c["name"], "email": None if key == "unknown" else c.get("email"), "dir": c["dir"],
                     "key": key, "text": text, "full_until": until, "working": live.get(c["name"], 0),
+                    "role": c.get("role") if c.get("role") in RL.STAGES else None,
                     "this_session": bool(me) and c.get("login") == me and key not in ("unknown", "duplicate"),
                     "login": A.login_command(c["name"]) if key == "not-signed-in" and not A.is_main(c["dir"])
                     else None})
@@ -81,8 +86,13 @@ def cmd_accounts(a):
     here = " (this app)" if A.in_app() else " (this session)"
     rows = [[c["name"] + (here if c["this_session"] else ""), c["email"] or "-", c["text"], c["working"] or "-"]
             for c in accs]
+    head = ["Account", "Email", "State", "Working"]
+    if any(c["role"] for c in accs):  # the column shows only once an account has a role
+        for r, c in zip(rows, accs):
+            r.insert(2, RL.ONLY[c["role"]] if c["role"] else "any stage")
+        head.insert(2, "Role")
     ready = sum(1 for c in accs if c["key"] == "ready")
-    print(table(rows, ["Account", "Email", "State", "Working"]))
+    print(table(rows, head))
     print()
     print("%d account%s ready to take work." % (ready, "" if ready == 1 else "s"))
     owner = next((c for c in accs if c["this_session"]), None)
@@ -128,18 +138,54 @@ def cmd_change(a):
     return 0
 
 
+def cmd_roles(a):
+    """What each account does. A role turns its stage on for every task; 'general' takes the role away."""
+    if a.clear:
+        for c in A.load()["accounts"]:
+            if c.get("role"):
+                A.set_role(c["name"], None)
+        print("No account has a role: every account takes any stage.")
+    for name, role in RL.parse(a.pairs).items():
+        A.set_role(name, role)
+        print("'%s' %s." % (name, "now " + RL.ONLY[role] if role else "takes any stage again"))
+    lst = A.load()
+    rows = [[c["name"], RL.ONLY[c["role"]] if c.get("role") in RL.STAGES else "any stage",
+             "" if c.get("active", True) else "(paused)"] for c in lst["accounts"] if not c.get("duplicate_of")]
+    print()
+    print(table(rows, ["Account", "Role", ""]))
+    jobs = RL.of_accounts(lst)
+    names = [c["name"] for c in A.available(lst)]
+    stages = [s for s in RL.STAGES if s == "dev" or s in jobs.values()]
+    print()
+    print("Every task goes through: %s." % RL.chain(stages))
+    for s in stages:
+        if not RL.possible(jobs, s, names):
+            print("-> Nobody can %s: give one account that role or leave one with no role." % RL.VERB[s])
+    return 0
+
+
 def cmd_split(a):
     plan = json.load(open(a.plan))
+    roles = RL.parse(a.roles) if a.roles else None
     run = W.create(plan, a.repo, test=a.test, model=a.model, effort=a.effort, budget=a.budget,
-                   max_local=a.max_local, account=a.account)
+                   max_local=a.max_local, account=a.account, roles=roles, stages=a.stages)
     if run.get("wip"):
         print("Saved your uncommitted work in a wip commit (%s) before starting." % run["wip"][:8])
-    accs = {}
-    for p in run["pieces"]:
-        accs.setdefault(p["account"], []).append(p["title"])
-    print("Run %s: %d pieces on %d accounts at once." % (run["id"], len(run["pieces"]), len(accs)))
-    for n, ts in accs.items():
-        print("   %s: %s" % (n, "; ".join(ts)))
+    if run["stage"] == "dev":
+        accs = {}
+        for p in run["pieces"]:
+            accs.setdefault(p["account"] or "waiting for a ready account", []).append(p["title"])
+        print("Run %s: %d pieces on %d accounts at once." % (run["id"], len(run["pieces"]), len(accs)))
+        for n, ts in accs.items():
+            print("   %s: %s" % (n, "; ".join(ts)))
+    else:
+        p = run["pieces"][-1]
+        print("Run %s: starts to %s on %s; the pieces are made when it ends." % (
+            run["id"], RL.VERB[run["stage"]], p["account"] or "the first ready account"))
+    if len(run["stages"]) > 1:
+        print("   Stages: %s" % RL.chain(run["stages"]))
+    if run.get("roles"):
+        print("   Roles: %s" % ", ".join("%s %s" % (n, RL.ONLY[r]) for n, r in sorted(run["roles"].items())))
     if not a.no_watcher:
         pid = W.start_watcher(run)
         print("The watcher started (pid %d) and checks every %d s." % (pid, W.PAUSE_S))
@@ -155,10 +201,12 @@ def run_data(rid):
     for p in run["pieces"]:
         at = p["attempts"][-1] if p["attempts"] else None
         try:
-            commits = int(W.git(run["repo"], "rev-list", "--count", "%s..%s" % (run["base"], p["branch"])))
+            commits = int(W.git(run["repo"], "rev-list", "--count", "%s..%s" % (p.get("since") or run["base"],
+                                                                                p["branch"]))) if p.get("branch") else None
         except Exception:
             commits = None
         pieces.append({"id": p["id"], "title": p["title"], "account": p["account"], "state": p["state"],
+                       "stage": RL.NAME[RL.stage_of(p)],
                        "state_text": J.STATES.get(p["state"], p["state"]),
                        "minutes": int(((at["end"] or now) - at["start"]) / 60) if at else None,
                        "commits": commits, "reason": p.get("reason") or "",
@@ -166,6 +214,7 @@ def run_data(rid):
     rep = os.path.join(W.folder(rid), "REPORT.md")
     return {"id": rid, "task": run.get("task") or "", "repo": run["repo"], "state": run["state"],
             "state_text": J.FINALS.get(run["state"], run["state"]), "pieces": pieces,
+            "stages": RL.chain(run.get("stages") or ["dev"]), "roles": run.get("roles") or {},
             "stopping": os.path.exists(os.path.join(W.folder(rid), "STOP")),
             "report": rep if run["state"] != "working" and os.path.exists(rep) else None}
 
@@ -176,10 +225,12 @@ def cmd_status(a):
         print("No runs yet.")
         return 0
     d = run_data(rid)
-    rows = [[p["title"][:40], p["account"], p["state_text"], "%d" % p["minutes"] if p["minutes"] is not None else "-",
+    rows = [[p["stage"], p["title"][:40], p["account"] or "-", p["state_text"],
+             "%d" % p["minutes"] if p["minutes"] is not None else "-",
              p["commits"] if p["commits"] is not None else "-", p["reason"][:60]] for p in d["pieces"]]
     print("Run %s - %s" % (rid, d["state_text"]))
-    print(table(rows, ["Piece", "Account", "State", "Min", "Commits", "Note"]))
+    print("Stages: %s" % d["stages"])
+    print(table(rows, ["Stage", "Piece", "Account", "State", "Min", "Commits", "Note"]))
     if d["report"]:
         print("\nReport: %s" % d["report"])
     return 0
@@ -260,6 +311,10 @@ def main(argv=None):
         s = sub.add_parser(action)
         s.add_argument("name")
         s.set_defaults(f=cmd_change, action=action)
+    s = sub.add_parser("roles")
+    s.add_argument("pairs", nargs="*", help="account=role: plan, design, dev, audit or general")
+    s.add_argument("--clear", action="store_true", help="take the role away from every account")
+    s.set_defaults(f=cmd_roles)
     s = sub.add_parser("split")
     s.add_argument("--plan", required=True)
     s.add_argument("--repo", required=True)
@@ -270,6 +325,8 @@ def main(argv=None):
     s.add_argument("--max-local", type=int)
     s.add_argument("--no-watcher", action="store_true")
     s.add_argument("--account", help="every piece starts on this one account")
+    s.add_argument("--roles", nargs="+", help="for this run only: account=role (plan, design, dev, audit or general)")
+    s.add_argument("--stages", nargs="+", help="stages on top of development: plan, design, audit")
     s.set_defaults(f=cmd_split)
     s = sub.add_parser("status")
     s.add_argument("id", nargs="?")
