@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """A fake `claude -p` for the tests. It reads the MA-REPORT / MA-FILES / MA-BRANCH lines of the prompt and behaves
-as FAKE_SCRIPT says, looked up as "piece:<id>", then the account ("main" or the CLAUDE_CONFIG_DIR folder name),
+as <home>/script.json says, looked up as "piece:<id>", then the account ("main" or the CLAUDE_CONFIG_DIR folder name),
 then "commit":
   commit     write its files, commit, report RESULT: DONE
   limit      answer with the usage-limit message and exit 1
@@ -8,7 +8,7 @@ then "commit":
   outside    also write shared.txt (outside its files): two of these make a merge conflict
   sleep      sleep 60 s (to test stopping a run)
   no-report  commit, but no report file: only the final answer says RESULT: DONE
-Every call appends one JSON line to FAKE_LEDGER: account, piece, mode, argv, which planted parent variables
+Every call appends one JSON line to <home>/ledger.jsonl: account, piece, mode, argv, which planted parent variables
 leaked. `claude auth status --json` answers from the folder's test file .fake-auth.json ({"email": ...}) and is not
 written to the ledger."""
 import json
@@ -21,8 +21,9 @@ import time
 # variables the tests plant in the parent; none of them may reach a `claude` run
 PROBES = ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ANTHROPIC_MODEL", "MA_UNLISTED")
 cfg = os.environ.get("CLAUDE_CONFIG_DIR", "")
+home = os.path.expanduser("~")
 if sys.argv[1:3] == ["auth", "status"]:
-    folder = cfg or os.path.join(os.environ.get("MA_HOME") or os.path.expanduser("~"), ".claude")
+    folder = cfg or os.path.join(home, ".claude")
     try:
         email = json.load(open(os.path.join(folder, ".fake-auth.json")))["email"]
         print(json.dumps({"loggedIn": True, "email": email}))
@@ -34,10 +35,10 @@ account = os.path.basename(cfg).replace(".claude-", "") if cfg else "main"
 field = lambda k: (re.findall(r"^%s: (.*)$" % k, prompt, re.M) or [""])[-1].strip()
 rep, files, branch = field("MA-REPORT"), [f for f in field("MA-FILES").split(",") if f], field("MA-BRANCH")
 piece = re.findall(r"^Your piece: (\S+)", prompt, re.M)[0]
-script = json.load(open(os.environ["FAKE_SCRIPT"])) if os.environ.get("FAKE_SCRIPT") else {}
+script = json.load(open(os.path.join(home, "script.json"))) if os.path.exists(os.path.join(home, "script.json")) else {}
 mode = script.get("piece:" + piece) or script.get(account) or "commit"
 join = "You join one piece" in prompt
-with open(os.environ["FAKE_LEDGER"], "a") as f:
+with open(os.path.join(home, "ledger.jsonl"), "a") as f:
     f.write(json.dumps({"account": account, "piece": piece, "mode": "join" if join else mode, "argv": sys.argv[1:-1],
                         "leak": [k for k in PROBES if k in os.environ],
                         "cwd": os.getcwd()}) + "\n")

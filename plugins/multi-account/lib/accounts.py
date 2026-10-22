@@ -37,17 +37,6 @@ NAME_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
 RESERVED = {"main", "multi-account", "all"}
 FULL_DEFAULT_S = 3600  # a limit message with no readable reset time keeps the account out for one hour
 CLAUDE = os.environ.get("MA_CLAUDE") or "claude"
-# a `claude` run for an account gets this fixed list of variables, never the whole environment: what a program needs
-# to run (path, home, locale, temp folder, proxy and certificate settings), plus any name listed in
-# MULTI_ACCOUNT_PASS_ENV (comma-separated)
-ENV_KEEP = ("PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TERM", "TMPDIR",
-            "TZ", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
-            "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
-            "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT",
-            "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP")
-# the parent session's variables (its session id, any Anthropic setting) never pass, even when listed, or the run
-# would act as the parent's account whatever CLAUDE_CONFIG_DIR says
-ENV_OUT = re.compile(r"^(CLAUDE_CODE_|CLAUDECODE$|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_CONFIG_DIR$|ANTHROPIC_)")
 WHO_TTL_S = 30  # a long-lived watcher asks again after this, so a sign-in or sign-out is seen
 
 
@@ -77,14 +66,19 @@ def config_env(d):
 
 
 def clean_env(d):
-    """The environment of a `claude` run for account d: the ENV_KEEP variables and the MULTI_ACCOUNT_PASS_ENV ones,
-    never the parent session's, with CLAUDE_CONFIG_DIR set to that folder (left unset for the main account)."""
-    names = ENV_KEEP + tuple(n.strip() for n in os.environ.get("MULTI_ACCOUNT_PASS_ENV", "").split(","))
-    env = {}
-    for n in names:
-        v = os.environ.get(n) if n else None
-        if v is not None and not ENV_OUT.match(n):
-            env[n] = v
+    """The environment of a `claude` run for account d: a short fixed list of this one's variables, each named here
+    (what a program needs to run: path, home, locale, temp folder, proxy and certificate settings), never the whole
+    environment. So the parent session's variables (its session id, any Anthropic setting) never reach the run, or it
+    would act as the parent's account whatever CLAUDE_CONFIG_DIR says. CLAUDE_CONFIG_DIR is set to that folder (left
+    unset for the main account)."""
+    keep = {"PATH": os.environ.get("PATH"), "HOME": os.environ.get("HOME"), "USER": os.environ.get("USER"),
+            "LOGNAME": os.environ.get("LOGNAME"), "SHELL": os.environ.get("SHELL"), "TERM": os.environ.get("TERM"),
+            "LANG": os.environ.get("LANG"), "LC_ALL": os.environ.get("LC_ALL"), "LC_CTYPE": os.environ.get("LC_CTYPE"),
+            "TMPDIR": os.environ.get("TMPDIR"), "TZ": os.environ.get("TZ"),
+            "HTTP_PROXY": os.environ.get("HTTP_PROXY"), "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
+            "NO_PROXY": os.environ.get("NO_PROXY"), "NODE_EXTRA_CA_CERTS": os.environ.get("NODE_EXTRA_CA_CERTS"),
+            "SSL_CERT_FILE": os.environ.get("SSL_CERT_FILE")}
+    env = {k: v for k, v in keep.items() if v is not None}
     cfg = config_env(d)
     if cfg:
         env["CLAUDE_CONFIG_DIR"] = cfg

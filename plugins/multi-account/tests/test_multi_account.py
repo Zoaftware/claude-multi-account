@@ -18,8 +18,7 @@ LIB = os.path.join(os.path.dirname(HERE), "lib")
 MA = os.path.join(LIB, "ma.py")
 FAKE = os.path.join(HERE, "fake_claude.py")
 NEVER_MODE = "bypass" + "Permissions"  # the permission mode a worker must never get
-PASS = "MA_HOME,FAKE_SCRIPT,FAKE_LEDGER"  # what the fake `claude` needs to see
-ARTIFACT_URL = "https://example.com/artifact/"
+ARTIFACT_URL = "urn:artifact:"  # the tests name no web host
 
 
 class World:
@@ -30,9 +29,9 @@ class World:
         self.data = os.path.join(self.home, "data")
         os.makedirs(os.path.join(self.home, ".claude"))
         self.script = {}
-        self.sign_in("~/.claude", "me@example.com")
-        self.sign_in("~/.claude-work", "work@example.com")
-        self.sign_in("~/.claude-spare", "Me@Example.com")  # the same login as the main one
+        self.sign_in("~/.claude", "me@home")
+        self.sign_in("~/.claude-work", "work@office")
+        self.sign_in("~/.claude-spare", "Me@Home")  # the same login as the main one
         self.repo = os.path.join(self.home, "project")
         os.makedirs(self.repo)
         self.git("init", "-q", "-b", "main")
@@ -55,10 +54,8 @@ class World:
 
     def env(self, **extra):
         json.dump(self.script, open(os.path.join(self.home, "script.json"), "w"))
-        e = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG") if k in os.environ}
-        e.update(MA_HOME=self.home, MULTI_ACCOUNT_HOME=self.data, FAKE_SCRIPT=os.path.join(self.home, "script.json"),
-                 FAKE_LEDGER=self.ledger, MA_CLAUDE=FAKE, MA_PAUSE="0.2", MA_NO_OPEN="1",
-                 MULTI_ACCOUNT_PASS_ENV=PASS)
+        e = {"PATH": os.environ.get("PATH") or "/usr/bin:/bin", "HOME": self.home, "MA_HOME": self.home,
+             "MULTI_ACCOUNT_HOME": self.data, "MA_CLAUDE": FAKE, "MA_PAUSE": "0.2", "MA_NO_OPEN": "1"}
         e.update(extra)
         return e
 
@@ -124,7 +121,6 @@ class Lib(unittest.TestCase):
         os.environ["MULTI_ACCOUNT_HOME"] = cls.tmp
         os.environ["MA_HOME"] = cls.tmp
         os.environ["MA_CLAUDE"] = FAKE  # never the real `claude`
-        os.environ["MULTI_ACCOUNT_PASS_ENV"] = PASS
         sys.path.insert(0, LIB)
         import accounts
         import split
@@ -136,7 +132,6 @@ class Lib(unittest.TestCase):
         os.environ.pop("MULTI_ACCOUNT_HOME", None)
         os.environ.pop("MA_HOME", None)
         os.environ.pop("MA_CLAUDE", None)
-        os.environ.pop("MULTI_ACCOUNT_PASS_ENV", None)
 
     def setUp(self):
         try:
@@ -214,13 +209,13 @@ class Accounts(unittest.TestCase):
         self.assertIn("not signed in", self.m.ma("accounts").stdout)
         self.assertFalse(os.path.exists(os.path.join(self.m.home, ".zshrc")))  # no shell file is edited
         # the user signs in there
-        self.m.sign_in("~/.claude-account2", "new@example.com")
+        self.m.sign_in("~/.claude-account2", "new@home")
         r = self.m.ma("connect", "account2")
         self.assertIn("connected", r.stdout)
         self.assertIn("3 accounts ready", self.m.ma("accounts").stdout)
         # one more, with a login that is already connected
         self.m.ma("connect", "other")
-        self.m.sign_in("~/.claude-other", "work@example.com")
+        self.m.sign_in("~/.claude-other", "work@office")
         r = self.m.ma("connect", "other")
         self.assertIn("same login as 'work'", r.stdout)
         self.assertIn("3 accounts ready", self.m.ma("accounts").stdout)
@@ -242,7 +237,7 @@ class Runs(unittest.TestCase):
     def setUp(self):
         self.m = World()
         self.m.ma("connect", "team")
-        self.m.sign_in("~/.claude-team", "team@example.com")
+        self.m.sign_in("~/.claude-team", "team@office")
 
     def tearDown(self):
         self.m.remove()
@@ -402,11 +397,10 @@ class Runs(unittest.TestCase):
         self.assertTrue(run["wip"])
         self.assertIn("half_done.txt", self.m.git("show", "--name-only", run["wip"]))
 
-    def test_a_worker_gets_only_the_listed_variables(self):
-        # the parent session's variables never pass, not even when listed; a variable off the list never passes
+    def test_a_worker_gets_only_the_fixed_variables(self):
+        # neither the parent session's variables nor any other one off the fixed list reach a worker
         rid, run = self.m.run([piece("a", ["a.txt"])], CLAUDECODE="1", CLAUDE_CODE_SESSION_ID="parent-session",
-                              CLAUDE_CODE_ENTRYPOINT="cli", ANTHROPIC_MODEL="parent-model", MA_UNLISTED="x",
-                              MULTI_ACCOUNT_PASS_ENV=PASS + ",CLAUDE_CODE_SESSION_ID,ANTHROPIC_MODEL")
+                              CLAUDE_CODE_ENTRYPOINT="cli", ANTHROPIC_MODEL="parent-model", MA_UNLISTED="x")
         self.assertEqual(run["state"], "ready-untested", self.m.file(rid, "watcher.log"))
         self.assertEqual([l["leak"] for l in self.m.calls()], [[]])
 

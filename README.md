@@ -51,9 +51,8 @@ the email, so two folders with the same login count once ("duplicate of main"). 
 network call of its own.
 
 Each `claude` it starts for an account gets only a short, fixed list of environment variables (path, home, locale,
-temp folder, proxy and certificate settings) plus that account's `CLAUDE_CONFIG_DIR`, never your whole environment.
-If your setup needs another variable, name it in `MULTI_ACCOUNT_PASS_ENV` (comma-separated). The variables of the
-session you start it from (`CLAUDE_CODE_*`, `ANTHROPIC_*`) never pass, even when named.
+temp folder, proxy and certificate settings) plus that account's `CLAUDE_CONFIG_DIR`, never your whole environment,
+so nothing from the session you start it from (`CLAUDE_CODE_*`, `ANTHROPIC_*`) reaches it.
 
 **Running a task.** `/multi-account:split <task>` (or a chat message that starts with `all:`) plans independent pieces,
 saves your uncommitted work in a wip commit, and starts one headless `claude -p` worker per piece, at most 6 at once
