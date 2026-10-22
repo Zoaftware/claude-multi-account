@@ -67,17 +67,15 @@ def config_env(d):
 
 def clean_env(d):
     """The environment of a `claude` run for account d: a short fixed list of this one's variables, each named here
-    (what a program needs to run: path, home, locale, temp folder, proxy and certificate settings), never the whole
-    environment. So the parent session's variables (its session id, any Anthropic setting) never reach the run, or it
-    would act as the parent's account whatever CLAUDE_CONFIG_DIR says. CLAUDE_CONFIG_DIR is set to that folder (left
-    unset for the main account)."""
+    (what a program needs to run: path, home, locale, temp folder), never the whole environment. So the parent
+    session's variables (its session id, any Anthropic setting) never reach the run, or it would act as the parent's
+    account whatever CLAUDE_CONFIG_DIR says. Proxy and certificate settings are not passed either: Claude Code reads
+    them from the `env` of that account's own settings.json. CLAUDE_CONFIG_DIR is set to that folder (left unset for
+    the main account)."""
     keep = {"PATH": os.environ.get("PATH"), "HOME": os.environ.get("HOME"), "USER": os.environ.get("USER"),
             "LOGNAME": os.environ.get("LOGNAME"), "SHELL": os.environ.get("SHELL"), "TERM": os.environ.get("TERM"),
             "LANG": os.environ.get("LANG"), "LC_ALL": os.environ.get("LC_ALL"), "LC_CTYPE": os.environ.get("LC_CTYPE"),
-            "TMPDIR": os.environ.get("TMPDIR"), "TZ": os.environ.get("TZ"),
-            "HTTP_PROXY": os.environ.get("HTTP_PROXY"), "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
-            "NO_PROXY": os.environ.get("NO_PROXY"), "NODE_EXTRA_CA_CERTS": os.environ.get("NODE_EXTRA_CA_CERTS"),
-            "SSL_CERT_FILE": os.environ.get("SSL_CERT_FILE")}
+            "TMPDIR": os.environ.get("TMPDIR"), "TZ": os.environ.get("TZ")}
     env = {k: v for k, v in keep.items() if v is not None}
     cfg = config_env(d)
     if cfg:

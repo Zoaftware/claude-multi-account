@@ -51,8 +51,10 @@ the email, so two folders with the same login count once ("duplicate of main"). 
 network call of its own.
 
 Each `claude` it starts for an account gets only a short, fixed list of environment variables (path, home, locale,
-temp folder, proxy and certificate settings) plus that account's `CLAUDE_CONFIG_DIR`, never your whole environment,
-so nothing from the session you start it from (`CLAUDE_CODE_*`, `ANTHROPIC_*`) reaches it.
+temp folder) plus that account's `CLAUDE_CONFIG_DIR`, never your whole environment, so nothing from the session you
+start it from (`CLAUDE_CODE_*`, `ANTHROPIC_*`) reaches it. Behind a proxy or with your own certificates, put those
+settings (`HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS`, ...) in the `env` of each account's `settings.json`
+(`~/.claude-<name>/settings.json`), where Claude Code reads them.
 
 **Running a task.** `/multi-account:split <task>` (or a chat message that starts with `all:`) plans independent pieces,
 saves your uncommitted work in a wip commit, and starts one headless `claude -p` worker per piece, at most 6 at once
