@@ -63,12 +63,14 @@ def accounts_data():
     """Every account as plain data: what the table and the pane show."""
     lst = A.load()
     live = _live_by_account()
+    me = A.this_session()
     out = []
     for c in lst["accounts"]:
         key, text = A.state(c)
         until = A.full_until(c["name"]) if key == "full" else None
-        out.append({"name": c["name"], "email": c.get("email"), "dir": c["dir"], "key": key, "text": text,
-                    "full_until": until, "working": live.get(c["name"], 0),
+        out.append({"name": c["name"], "email": None if key == "unknown" else c.get("email"), "dir": c["dir"],
+                    "key": key, "text": text, "full_until": until, "working": live.get(c["name"], 0),
+                    "this_session": bool(me) and c.get("login") == me and key not in ("unknown", "duplicate"),
                     "login": A.login_command(c["name"]) if key == "not-signed-in" and not A.is_main(c["dir"])
                     else None})
     return out
@@ -76,11 +78,19 @@ def accounts_data():
 
 def cmd_accounts(a):
     accs = accounts_data()
-    rows = [[c["name"], c["email"] or "-", c["text"], c["working"] or "-"] for c in accs]
+    here = " (this app)" if A.in_app() else " (this session)"
+    rows = [[c["name"] + (here if c["this_session"] else ""), c["email"] or "-", c["text"], c["working"] or "-"]
+            for c in accs]
     ready = sum(1 for c in accs if c["key"] == "ready")
     print(table(rows, ["Account", "Email", "State", "Working"]))
     print()
     print("%d account%s ready to take work." % (ready, "" if ready == 1 else "s"))
+    owner = next((c for c in accs if c["this_session"]), None)
+    for c in accs:
+        if c["key"] == "unknown" and owner:
+            print("-> '%s' takes no work here: the Claude app writes its own account (%s) into %s, and '%s' already "
+                  "holds that account, so the login a run in %s would use is unknown." % (
+                      c["name"], owner["email"], c["dir"], owner["name"], c["dir"]))
     for c in accs:
         if c["login"]:
             print("-> '%s' is not signed in: in a terminal run  %s  and sign in there." % (c["name"], c["login"]))
@@ -101,6 +111,9 @@ def cmd_connect(a):
     elif r["state"] == "duplicate":
         print("'%s' has the same login as '%s' (%s): it does not count as another account. Sign in there with a "
               "different account." % (r["name"], r["duplicate_of"], r["email"]))
+    elif r["state"] == "unknown":
+        print("'%s': %s (the app writes its own account into %s); it takes no work here." % (r["name"], r["text"],
+                                                                                            r["dir"]))
     else:
         print("'%s' connected: %s - %s." % (r["name"], r["email"] or "-", r["text"]))
     return 0

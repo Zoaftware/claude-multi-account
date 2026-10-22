@@ -213,6 +213,33 @@ class Accounts(unittest.TestCase):
         self.assertIn("2 accounts ready", r.stdout)
         self.assertIn("duplicate of main", r.stdout)
 
+    def test_marks_this_app_and_lets_another_folder_own_the_app_account(self):
+        app = {"CLAUDE_CODE_USER_EMAIL": "ME@home", "CLAUDE_CODE_DESKTOP_APP_VERSION": "1.0"}
+        r = self.m.ma("accounts", **app)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = {c["name"]: c for c in self.m.accounts()["accounts"]}
+        self.assertIsNone(rows["spare"]["duplicate_of"])  # the other folder owns the app's account
+        self.assertEqual(rows["main"]["duplicate_of"], "spare")
+        self.assertIn("spare (this app)", r.stdout)
+        self.assertIn("login unknown in the Claude app", r.stdout)
+        self.assertIn("-> 'main' takes no work here", r.stdout)
+        self.assertIn("2 accounts ready", r.stdout)
+        d = {c["name"]: c for c in json.loads(self.m.ma("pane", **app).stdout)["accounts"]}
+        self.assertEqual((d["main"]["key"], d["main"]["email"], d["main"]["this_session"]), ("unknown", None, False))
+        self.assertTrue(d["spare"]["this_session"])
+        self.m.run([piece("a", ["a.txt"]), piece("b", ["b.txt"]), piece("c", ["c.txt"])], **app)
+        calls = self.m.calls()
+        self.assertEqual(sorted({l["account"] for l in calls}), ["spare", "work"])  # no piece runs on main
+        self.assertEqual([l["leak"] for l in calls if l["leak"]], [])
+        # outside the app the session's email only marks its row
+        r = self.m.ma("accounts", CLAUDE_CODE_USER_EMAIL="me@home")
+        self.assertIn("main (this session)", r.stdout)
+        self.assertIn("duplicate of main", r.stdout)
+        self.assertNotIn("unknown", r.stdout)
+        r = self.m.ma("accounts")
+        self.assertNotIn("(this", r.stdout)
+        self.assertNotIn("unknown", r.stdout)
+
     def test_connect_one_at_a_time(self):
         r = self.m.ma("connect")
         self.assertEqual(r.returncode, 0, r.stderr)

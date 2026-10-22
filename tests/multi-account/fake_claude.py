@@ -21,7 +21,9 @@ import time
 # variables the tests plant in the parent, each read by name; none of them may reach a `claude` run
 PROBES = {"CLAUDECODE": os.environ.get("CLAUDECODE"), "CLAUDE_CODE_SESSION_ID": os.environ.get("CLAUDE_CODE_SESSION_ID"),
           "CLAUDE_CODE_ENTRYPOINT": os.environ.get("CLAUDE_CODE_ENTRYPOINT"),
-          "ANTHROPIC_MODEL": os.environ.get("ANTHROPIC_MODEL"), "MA_UNLISTED": os.environ.get("MA_UNLISTED")}
+          "ANTHROPIC_MODEL": os.environ.get("ANTHROPIC_MODEL"), "MA_UNLISTED": os.environ.get("MA_UNLISTED"),
+          "CLAUDE_CODE_USER_EMAIL": os.environ.get("CLAUDE_CODE_USER_EMAIL"),
+          "CLAUDE_CODE_DESKTOP_APP_VERSION": os.environ.get("CLAUDE_CODE_DESKTOP_APP_VERSION")}
 cfg = os.environ.get("CLAUDE_CONFIG_DIR", "")
 home = os.path.expanduser("~")
 if sys.argv[1:3] == ["auth", "status"]:

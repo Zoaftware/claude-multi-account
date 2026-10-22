@@ -48,7 +48,9 @@ macOS; elsewhere the plugin prints the command to run.
 The plugin never reads, stores or sends a password or a token, and it never opens Claude Code's own files. To know
 who is signed in to a folder it asks Claude Code itself (`claude auth status --json` for that folder) and keeps only
 the email, so two folders with the same login count once ("duplicate of main"). It never measures usage and makes no
-network call of its own.
+network call of its own. The table marks the account the current session runs on ("this app" in the Claude app), from
+the email Claude Code gives its own tools. The Claude app writes its own account into `~/.claude`, so when another
+folder holds that account, that folder owns it and main shows "login unknown in the Claude app" and takes no work.
 
 Each `claude` it starts for an account gets only a short, fixed list of environment variables (path, home, locale,
 temp folder) plus that account's `CLAUDE_CONFIG_DIR`, never your whole environment, so nothing from the session you

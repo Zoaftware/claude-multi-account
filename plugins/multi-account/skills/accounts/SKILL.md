@@ -36,6 +36,9 @@ path, use the newest installed copy: `python3 "$(ls -d ~/.claude/plugins/cache/*
   second time; it takes no new piece until the reset time that message named (or one hour when it named none, which
   the row says).
 - **paused**, **not signed in**, **duplicate of <name>**: takes no work; say what the user can do about it.
+- **login unknown in the Claude app** (main only): inside the Claude app, `~/.claude` shows the app's own account,
+  and another folder already holds that account, so that folder owns it and main takes no work from here.
+- **(this app)** / **(this session)** after a name: the account this session runs on.
 
 ## Reply
 
