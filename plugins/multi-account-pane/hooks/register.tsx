@@ -22,27 +22,9 @@ const confirm = atom({ plugin: 'multi-account-pane', key: 'confirm' } as const, 
 const isOpen = atom({ plugin: 'multi-account-pane', key: 'open' } as const, false)
 const target = atom({ plugin: 'multi-account-pane', key: 'target' } as const, null)
 
-// The pane runs the installed multi-account plugin's own CLI: the newest installed version, found by its number
-// (1.0.10 after 1.0.9), whatever config folder holds it.
-const LOCATOR = `
-import glob, json, os, runpy, sys
-def version(p):
-    try:
-        return tuple(int(x) for x in os.path.basename(os.path.dirname(os.path.dirname(p))).split('.'))
-    except ValueError:
-        return (-1,)
-seen = {}
-for p in glob.glob(os.path.expanduser('~/.claude*/plugins/cache/*/multi-account/*/lib/ma.py')):
-    seen.setdefault(os.path.realpath(p), p)
-found = sorted(seen.values(), key=version)
-if not found:
-    print(json.dumps({"error": "the multi-account plugin is not installed"}))
-    sys.exit(3)
-path = found[-1]
-sys.argv = [path] + sys.argv[1:]
-sys.path.insert(0, os.path.dirname(path))
-runpy.run_path(path, run_name='__main__')
-`
+// The pane runs the multi-account plugin's own CLI through one named script of its own, which finds that plugin
+// installed beside this one (lib/run-multi-account.py says where it looks).
+const RUNNER = 'lib/run-multi-account.py'
 
 type Tone = 'success' | 'error' | 'warning' | 'inactive'
 
@@ -69,7 +51,7 @@ const RUN: Record<string, Tone> = {
 let timer: { cancel: () => void } | undefined
 
 async function ma($: EngineInterface, args: string[]) {
-  const r = await $.process.run(['/usr/bin/python3', '-c', LOCATOR, ...args], {
+  const r = await $.process.run(['/usr/bin/python3', `${$.plugin.root}/${RUNNER}`, ...args], {
     cwd: '/tmp',
     timeoutMs: WAIT_MS,
   })
@@ -233,12 +215,6 @@ export const register: Register = on => {
     if (!k) return r
 
     return { ...r, decorations: [...(r.decorations ?? []), { start: k.from, end: k.end, color: 'claude', bold: true }] }
-  })
-
-  on('prompt.change', async ($, e, next) => {
-    await mark($, route(e.text, await read($, data))?.to ?? null)
-
-    return next(e)
   })
 
   // The first word of a message offers "all:" and every account, each with where it would go.

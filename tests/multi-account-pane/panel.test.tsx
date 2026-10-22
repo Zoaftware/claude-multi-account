@@ -81,7 +81,11 @@ function engine(on: On, opts: { pane?: string; out?: string; exitCode?: number }
     return {}
   })
   on('process.run', (_, e) => {
-    const args = e.argv.slice(3)
+    // One named script of the pane's own, never inline code: argv is python3, that script, then the CLI's words.
+    if (e.argv[0] !== '/usr/bin/python3' || !e.argv[1].endsWith('/lib/run-multi-account.py')) {
+      throw new Error('unexpected command: ' + e.argv.slice(0, 2).join(' '))
+    }
+    const args = e.argv.slice(2)
     calls.push(args)
     const pane = args[0] === 'pane'
     return {
@@ -214,7 +218,6 @@ function chat(on: On, box = 'fix the login') {
     const text = e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end)
     return { text, cursor: e.start + e.inputText.length }
   })
-  on('prompt.change', (_, e) => ({ text: e.text }))
   // The engine's own band, drawn when the plugin passes: an empty row.
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)

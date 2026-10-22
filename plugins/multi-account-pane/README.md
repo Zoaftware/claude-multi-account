@@ -34,7 +34,28 @@ Refreshed every 30 seconds:
 When no surface draws the pane (it was closed, or the window is narrow), a band above the prompt has a button that
 opens it again; `/accounts-pane` opens it too.
 
-The pane runs the newest installed `multi-account` CLI (`lib/ma.py`), found by version number in any config folder.
+## What it runs, reads and sends
+
+- **One program, by name.** Every refresh and every button runs `/usr/bin/python3 lib/run-multi-account.py <words>`,
+  a script in this plugin. The script finds the `multi-account` plugin installed beside this one
+  (`../multi-account/lib/ma.py` in this repository, else the newest `multi-account/<version>/lib/ma.py` in the same
+  Claude Code plugin cache) and runs its CLI with these words only:
+  - `pane`, every 30 seconds: the accounts, the last run and the artifact copies, as JSON;
+  - `pause <account>`, `resume <account>` and `stop <run>`, from their buttons;
+  - `connect [<account>]`, which opens the sign-in window (`osascript` on macOS);
+  - `view <artifact>` and `gallery`, which open a local copy, or the local page of every copy, in your browser
+    (`open` on macOS, `xdg-open` elsewhere).
+
+  The pane starts no other program. What the CLI does is described in the
+  [repository README](../../README.md#how-it-works).
+- **No network calls of its own.** The pane makes no request. Its one link, zoaftware.com, opens only when you click
+  it.
+- **What it reads from the chat.** The pane reads the message being typed or sent only to find a route word at its
+  start (`all:` or an account's name). When it finds one, it adds one instruction to that same message, in this same
+  session, so Claude runs `/multi-account:split` with the task. The pane stores nothing from the chat and sends
+  nothing anywhere. The split's workers get the task through the `multi-account` plugin, each under one of your own
+  accounts, like any Claude Code session.
+- **`/accounts-pane`**, the one command it registers, opens the pane and does nothing else.
 
 ## Tests
 
